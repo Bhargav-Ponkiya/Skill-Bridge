@@ -1,0 +1,411 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+input AddPortfolioInput {
+  description: String
+  skillId: String!
+  title: String!
+  type: String! = "other"
+  url: String!
+}
+
+type AffinityBreakdown {
+  """Category match contribution (0-100)"""
+  categoryScore: Float!
+
+  """Boost for previously explored but deep-dive skills"""
+  depthBoost: Float!
+
+  """Semantic similarity contribution (0-100)"""
+  semanticScore: Float!
+}
+
+type AuthResponse {
+  accessToken: String!
+  user: User!
+}
+
+type AvailabilitySlot {
+  day: Int!
+  endMinute: Int!
+  startMinute: Int!
+}
+
+input AvailabilitySlotInput {
+  day: Int!
+  endMinute: Int!
+  startMinute: Int!
+}
+
+input CreateMatchRequestInput {
+  message: String
+  offeredSkillId: ID!
+  toUserId: ID!
+  wantedSkillId: ID!
+}
+
+input CreateMessageInput {
+  content: String!
+  sessionId: String!
+}
+
+input CreateReviewInput {
+  comment: String
+  rating: Int!
+  revieweeId: String!
+  sessionId: String!
+}
+
+input CreateSkillInput {
+  category: String!
+  description: String
+  isActive: Boolean = true
+  proficiencyLevel: ProficiencyLevel
+  title: String!
+  type: SkillType!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+type MatchRequest {
+  createdAt: DateTime!
+  fromUser: User
+  fromUserId: String!
+  id: ID!
+  message: String
+  offeredSkill: Skill
+  offeredSkillId: String!
+  session: Session
+  status: MatchRequestStatus!
+  toUser: User
+  toUserId: String!
+  updatedAt: DateTime!
+  wantedSkill: Skill
+  wantedSkillId: String!
+}
+
+enum MatchRequestStatus {
+  ACCEPTED
+  DECLINED
+  PENDING
+}
+
+type Message {
+  content: String!
+  createdAt: DateTime!
+  id: ID!
+  isRead: Boolean!
+  sender: User
+  senderId: String!
+  session: Session
+  sessionId: String!
+  updatedAt: DateTime!
+}
+
+type Mutation {
+  addPortfolio(input: AddPortfolioInput!): Portfolio!
+  addSkill(input: CreateSkillInput!): Skill!
+  changeSessionStatus(id: String!, status: SessionStatus!): Session!
+  createReview(input: CreateReviewInput!): Review!
+  deleteSkill(id: String!): Boolean!
+  guestLogin: AuthResponse!
+  login(input: LoginInput!): AuthResponse!
+  logout: Boolean!
+  markNotificationRead(id: String!): Notification!
+  markSessionRead(sessionId: String!): Int!
+  refreshToken: AuthResponse!
+  register(input: RegisterInput!): AuthResponse!
+  removePortfolio(id: String!): Boolean!
+  respondToMatchRequest(accept: Boolean!, requestId: String!): MatchRequest!
+  sendMatchRequest(input: CreateMatchRequestInput!): MatchRequest!
+  sendMessage(input: CreateMessageInput!): Message!
+  setAvailability(slots: [AvailabilitySlotInput!]!): [AvailabilitySlot!]!
+  setTyping(isTyping: Boolean!, sessionId: String!): Boolean!
+  toggleSessionProgress(id: String!): Session!
+  toggleSkillActive(id: String!): Skill!
+  updatePortfolio(id: String!, input: UpdatePortfolioInput!): Portfolio!
+  updateProfile(input: UpdateProfileInput!): User!
+  updateSession(id: String!, input: UpdateSessionInput!): Session!
+  updateSkill(id: String!, input: UpdateSkillInput!): Skill!
+}
+
+type Notification {
+  createdAt: DateTime!
+  id: ID!
+  isRead: Boolean!
+  message: String!
+  relatedId: String
+  title: String!
+  type: String!
+  updatedAt: DateTime!
+  user: User
+  userId: String!
+}
+
+type PaginatedMatchRequests {
+  items: [MatchRequest!]!
+  meta: PaginationMeta!
+}
+
+type PaginatedSkills {
+  items: [Skill!]!
+  meta: PaginationMeta!
+}
+
+input PaginationInput {
+  limit: Int! = 20
+  page: Int! = 1
+}
+
+type PaginationMeta {
+  currentPage: Int!
+  itemCount: Int!
+  itemsPerPage: Int!
+  totalItems: Int!
+  totalPages: Int!
+}
+
+type Portfolio {
+  createdAt: DateTime!
+  description: String
+  id: ID!
+  skillId: String!
+  title: String!
+  type: String!
+  updatedAt: DateTime!
+  url: String!
+}
+
+enum ProficiencyLevel {
+  BEGINNER
+  EXPERT
+  INTERMEDIATE
+}
+
+type Query {
+  me: User!
+  messages(sessionId: String!): [Message!]!
+  myMatchRequests(pagination: PaginationInput, type: String!): PaginatedMatchRequests!
+  myNotifications: [Notification!]!
+  mySessions: [Session!]!
+  mySkills: [Skill!]!
+
+  """
+  Search active skills offered by other users (excludes the current user).
+  """
+  searchSkills(category: String, pagination: PaginationInput, query: String, type: String): PaginatedSkills!
+  session(id: String!): Session!
+
+  """
+  Ranked OFFER skills from other users that match the current user's WANTs, scored 0-100.
+  """
+  suggestedMatches: [SuggestedMatch!]!
+
+  """
+  Look up a user by username (email local-part or display name) for the public profile page.
+  """
+  userByUsername(identifier: String!): User!
+  userReviews(userId: String!): [Review!]!
+
+  """Aggregate trust + activity signals for the given user."""
+  userStats(userId: String!): UserStats!
+}
+
+input RegisterInput {
+  email: String!
+  name: String!
+  password: String!
+}
+
+type Review {
+  comment: String
+  createdAt: DateTime!
+  id: ID!
+  rating: Int!
+  reviewee: User
+  revieweeId: String!
+  reviewer: User
+  reviewerId: String!
+  session: Session
+  sessionId: String!
+  updatedAt: DateTime!
+}
+
+type Session {
+  """JSON structure for session milestones"""
+  checkpoints: String
+  createdAt: DateTime!
+  duration: Float
+  format: SessionFormat
+  id: ID!
+  matchRequest: MatchRequest
+  matchRequestId: String
+  meetingLink: String
+  p1Completed: Boolean!
+  p2Completed: Boolean!
+  participant1: User
+  participant1Id: String!
+  participant2: User
+  participant2Id: String!
+
+  """AI-generated roadmap for future direction after this session"""
+  roadmap: String
+  scheduledAt: DateTime
+  skill1: Skill
+  skill1Id: String!
+  skill2: Skill
+  skill2Id: String!
+  status: SessionStatus!
+
+  """JSON structure for AI-suggested learning resources"""
+  suggestedResources: String
+  summary: String
+  updatedAt: DateTime!
+}
+
+enum SessionFormat {
+  IN_PERSON
+  TEXT
+  VIDEO
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  NEGOTIATING
+  REVIEWED
+  SCHEDULED
+}
+
+type Skill {
+  category: String!
+  createdAt: DateTime!
+  description: String
+  id: ID!
+  isActive: Boolean!
+  portfolios: [Portfolio!]
+  proficiencyLevel: ProficiencyLevel
+  title: String!
+  type: SkillType!
+  updatedAt: DateTime!
+  user: User
+  userId: String!
+}
+
+enum SkillType {
+  OFFER
+  WANT
+}
+
+type Subscription {
+  matchRequestUpdated(userId: String!): MatchRequest!
+  messageAdded(sessionId: String!): Message!
+  onNotification(userId: String!): Notification!
+  sessionUpdated(sessionId: String!): Session!
+  typingChanged(sessionId: String!): TypingEvent!
+}
+
+type SuggestedMatch {
+  """Breakdown of the affinity score."""
+  affinityBreakdown: AffinityBreakdown!
+  id: String!
+
+  """Which of the current user's WANT skills this matched against"""
+  matchedWantSkillId: String
+  matchedWantSkillTitle: String
+
+  """Human-readable reason for this match"""
+  reason: String!
+
+  """Affinity score 0-100 from semantic similarity"""
+  score: Float!
+  skill: Skill!
+}
+
+type TrustBreakdown {
+  portfolioSignal: Float!
+  reviewSignal: Float!
+  sessionSignal: Float!
+}
+
+type TypingEvent {
+  isTyping: Boolean!
+  sessionId: String!
+  userId: String!
+  userName: String
+}
+
+input UpdatePortfolioInput {
+  description: String
+  id: ID!
+  skillId: String
+  title: String
+  type: String = "other"
+  url: String
+}
+
+input UpdateProfileInput {
+  avatar: String
+  bio: String
+  name: String
+  timezone: String
+}
+
+input UpdateSessionInput {
+  duration: Float
+  format: String
+  meetingLink: String
+  scheduledAt: DateTime
+}
+
+input UpdateSkillInput {
+  category: String
+  description: String
+  isActive: Boolean = true
+  proficiencyLevel: ProficiencyLevel
+  title: String
+  type: SkillType
+}
+
+type User {
+  availability: [AvailabilitySlot!]
+  avatar: String
+  bio: String
+  createdAt: DateTime!
+  email: String!
+  id: ID!
+  isGuest: Boolean!
+  isVerified: Boolean!
+  name: String!
+  reviewCount: Int!
+  skills: [Skill]
+  timezone: String
+  trustScore: Float!
+  updatedAt: DateTime!
+}
+
+type UserStats {
+  averageRating: Float!
+  portfolioCount: Int!
+  reviewCount: Int!
+  sessionsCompleted: Int!
+  skillsOffered: Int!
+  skillsWanted: Int!
+
+  """The individual signals that contribute to the trust score."""
+  trustBreakdown: TrustBreakdown!
+
+  """
+  A 0-100 trust signal blending reviews, completed sessions, and portfolio richness.
+  """
+  trustScore: Float!
+}

@@ -1,0 +1,321 @@
+'use client';
+
+import { useState, useMemo } from 'react';
+import Link from 'next/link';
+import { useQuery, useMutation } from '@apollo/client/react';
+import { SEARCH_SKILLS, GET_ME } from '@/graphql/queries';
+import { SEND_MATCH_REQUEST } from '@/graphql/mutations';
+import { Search, Loader2, Filter, Compass, Zap, ArrowRight } from 'lucide-react';
+import { SkillCard, type SkillCardSkill } from '@/components/SkillCard';
+import { Modal } from '@/components/Modal';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+
+const CATEGORIES = ['All', 'Technology', 'Design', 'Business', 'Music', 'Cooking', 'Language', 'Lifestyle', 'Fitness', 'Writing'];
+
+type SkillTypeFilter = 'OFFER' | 'WANT' | 'ALL';
+
+export default function ExplorePage() {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('All');
+  const [type, setType] = useState<SkillTypeFilter>('OFFER');
+  const [swap, setSwap] = useState<SkillCardSkill | null>(null);
+  const [offeredSkillId, setOfferedSkillId] = useState('');
+  const [message, setMessage] = useState('');
+  const [page, setPage] = useState(1);
+  const LIMIT = 12;
+
+  const { data: meData } = useQuery<any>(GET_ME);
+  const { data, loading } = useQuery<any>(SEARCH_SKILLS, {
+    variables: {
+      query: query.trim() || null,
+      category: category === 'All' ? null : category,
+      type: type === 'ALL' ? null : type,
+      pagination: { page, limit: LIMIT },
+    },
+  });
+
+  const myOfferSkills = useMemo(
+    () => (meData?.me?.skills ?? []).filter((s: any) => s.type === 'OFFER' && s.isActive !== false),
+    [meData],
+  );
+  const skills: SkillCardSkill[] = data?.searchSkills?.items ?? [];
+  const meta = data?.searchSkills?.meta;
+
+  const [sendMatchRequest, { loading: sending }] = useMutation(SEND_MATCH_REQUEST, {
+    onCompleted: () => {
+      setSwap(null);
+      setOfferedSkillId('');
+      setMessage('');
+      toast.success('Swap request sent! We notified your partner.');
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const submitSwap = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!swap || !swap.user || !offeredSkillId) return;
+    sendMatchRequest({
+      variables: {
+        input: {
+          toUserId: swap.user.id,
+          wantedSkillId: swap.id,
+          offeredSkillId,
+          message:
+            message.trim() ||
+            `Hi ${swap.user.name}, I'd love to swap skills around "${swap.title}".`,
+        },
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-8 animate-fade-in pb-12">
+      {/* Search & Hero */}
+      <section className="relative overflow-hidden rounded-3xl border border-accent/20 bg-gradient-to-br from-accent/10 via-surface to-surface p-8 md:p-12">
+        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-accent/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 max-w-3xl space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent text-[10px] font-bold uppercase tracking-wider">
+            <Compass className="w-3.5 h-3.5" /> Explorer Mode
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-fg tracking-tight leading-[1.1]">
+            Learn anything, <br />
+            <span className="text-accent underline decoration-accent/30 underline-offset-8">swap everything.</span>
+          </h1>
+          <p className="text-base text-muted leading-relaxed max-w-xl">
+            Join the world's most active skill-swapping community. Find mentors, teaching partners, and collaborators across thousands of skills.
+          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <div className="relative flex-1 group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted group-focus-within:text-accent transition-colors" />
+              <input
+                type="text"
+                placeholder="What do you want to learn today?"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
+                className="input-base !h-14 pl-12 !rounded-2xl !bg-surface/80 backdrop-blur-sm border-border shadow-sm focus:shadow-md transition-all text-base"
+              />
+            </div>
+            <div className="flex bg-surface-2 p-1.5 rounded-2xl border border-border shrink-0 h-14">
+              {(['OFFER', 'WANT', 'ALL'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => {
+                    setType(t);
+                    setPage(1);
+                  }}
+                  className={cn(
+                    'px-6 py-2 rounded-xl text-sm font-bold transition-all',
+                    type === t ? 'bg-surface text-accent shadow-sm border border-border' : 'text-muted hover:text-fg',
+                  )}
+                >
+                  {t === 'OFFER' ? 'Teach' : t === 'WANT' ? 'Want' : 'Both'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Category Scroller */}
+      <div className="sticky top-[72px] z-20 bg-bg/80 backdrop-blur-md py-4 -mx-4 px-4 border-b border-transparent transition-all">
+        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => {
+                setCategory(cat);
+                setPage(1);
+              }}
+              className={cn(
+                'whitespace-nowrap px-5 py-2 rounded-full text-sm font-semibold border transition-all',
+                category === cat
+                  ? 'bg-accent border-accent text-white shadow-md'
+                  : 'bg-surface border-border text-fg-soft hover:border-accent/40'
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-warning" />
+            <h2 className="text-lg font-bold text-fg">
+              {category === 'All' ? 'Latest Opportunities' : `Top in ${category}`}
+            </h2>
+          </div>
+          {meta && <span className="text-xs font-bold text-accent bg-accent/10 px-2 py-1 rounded-md">{meta.totalItems} results</span>}
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="surface border rounded-2xl p-5 h-48 animate-pulse bg-surface-2" />
+            ))}
+          </div>
+        ) : skills.length === 0 ? (
+          <div className="surface border border-dashed rounded-3xl p-16 text-center space-y-4 max-w-2xl mx-auto">
+            <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-2">
+              <Search className="w-8 h-8 text-muted" />
+            </div>
+            <h3 className="text-xl font-bold text-fg">No direct matches found</h3>
+            <p className="text-muted leading-relaxed">
+              We couldn't find exactly what you're looking for. Try broadening your keywords or exploring other categories.
+            </p>
+            <button
+              onClick={() => {
+                setQuery('');
+                setCategory('All');
+                setType('OFFER');
+                setPage(1);
+              }}
+              className="btn-primary !px-8"
+            >
+              Clear all filters
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {skills.map((skill) => (
+                <SkillCard
+                  key={skill.id}
+                  skill={skill}
+                  variant="public"
+                  onConnect={skill.type === 'OFFER' ? () => setSwap(skill) : undefined}
+                  footer={
+                    <Link
+                      href={`/${encodeURIComponent(skill.user?.name ?? '')}`}
+                      className="text-[10px] font-bold text-muted-2 hover:text-accent uppercase tracking-widest flex items-center justify-between group"
+                    >
+                      Partner Portfolio <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  }
+                />
+              ))}
+            </div>
+
+            {meta && meta.totalPages > 1 && (
+              <div className="flex items-center justify-center gap-4 pt-10">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="btn-secondary !py-2 !px-6 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-2">
+                   {[...Array(meta.totalPages)].map((_, i) => (
+                     <button
+                        key={i}
+                        onClick={() => setPage(i + 1)}
+                        className={cn(
+                          "w-8 h-8 rounded-lg text-xs font-bold transition-all",
+                          page === i + 1 ? "bg-accent text-white" : "hover:bg-surface-2 text-muted"
+                        )}
+                     >
+                       {i + 1}
+                     </button>
+                   ))}
+                </div>
+                <button
+                  disabled={page === meta.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="btn-secondary !py-2 !px-6 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Swap modal */}
+      <Modal
+        open={!!swap}
+        onClose={() => setSwap(null)}
+        title="Propose a swap"
+        description={swap ? `Pick which of your skills you'll teach in return for "${swap.title}".` : ''}
+      >
+        {swap && swap.user && (
+          <form onSubmit={submitSwap} className="space-y-5">
+            <div className="p-4 rounded-xl bg-accent-soft border border-accent/20">
+              <p className="label-base">You want to learn</p>
+              <p className="font-semibold text-fg mt-1">{swap.title}</p>
+              <p className="text-xs text-muted mt-1">From {swap.user.name}</p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="label-base">What you'll teach in return</p>
+              {myOfferSkills.length === 0 ? (
+                <div className="p-4 rounded-xl bg-surface-2 border border-dashed text-sm text-muted">
+                  You don't have any skills to teach yet.{' '}
+                  <Link href="/profile" className="font-semibold text-accent hover:underline">
+                    Add one →
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {myOfferSkills.map((skill: any) => (
+                    <button
+                      key={skill.id}
+                      type="button"
+                      onClick={() => setOfferedSkillId(skill.id)}
+                      className={cn(
+                        'flex items-center justify-between p-3 rounded-xl border text-left transition-all',
+                        offeredSkillId === skill.id
+                          ? 'border-accent bg-accent-soft'
+                          : 'border-border hover:border-border-strong',
+                      )}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-fg">{skill.title}</p>
+                        <p className="text-xs text-muted">{skill.category} • {skill.proficiencyLevel}</p>
+                      </div>
+                      {offeredSkillId === skill.id && <Zap className="w-4 h-4 text-accent" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <label className="block space-y-2">
+              <span className="label-base">Personal note (optional)</span>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={3}
+                maxLength={300}
+                placeholder="Why this swap interests you…"
+                className="input-base"
+              />
+            </label>
+
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setSwap(null)} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!offeredSkillId || sending}
+                className="btn-primary flex items-center gap-2 disabled:opacity-60"
+              >
+                {sending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Send swap request
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+    </div>
+  );
+}
