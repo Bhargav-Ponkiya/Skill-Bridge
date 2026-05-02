@@ -44,3 +44,5 @@ Thumbs.db
 # Project specific
 next-env.d.ts
 *.resolved
+*.pdf
+*.docx
