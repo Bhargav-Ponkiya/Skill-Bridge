@@ -1,4 +1,4 @@
-import { Controller, Sse, Param } from '@nestjs/common';
+import { Controller, Sse, Param, Query, Body, Post, Get } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Observable } from 'rxjs';
@@ -6,6 +6,7 @@ import { AiService } from './ai.service';
 import { Message } from '../message/message.entity';
 import { Review } from '../review/review.entity';
 import { Public } from '../../common/decorators/public.decorator';
+import { Session } from '../session/session.entity';
 
 const MIN_MESSAGES = 6;
 const MIN_TOTAL_WORDS = 20;
@@ -18,6 +19,8 @@ export class AiController {
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
+    @InjectRepository(Session)
+    private readonly sessionRepository: Repository<Session>,
   ) {}
 
   @Public()
@@ -52,6 +55,36 @@ export class AiController {
         } catch (e) {
           subscriber.error(e);
         } finally {
+          subscriber.next({ data: '[DONE]' } as MessageEvent);
+          subscriber.complete();
+        }
+      })();
+    });
+  }
+
+  @Public()
+  @Sse('agenda')
+  streamAgenda(
+    @Query('offered') offeredTitle: string,
+    @Query('wanted') wantedTitle: string,
+    @Query('duration') durationParam: string,
+  ): Observable<MessageEvent> {
+    return new Observable<MessageEvent>((subscriber) => {
+      (async () => {
+        try {
+          const duration = parseInt(durationParam || '60', 10) || 60;
+          const generator = this.aiService.generateAgendaStream(
+            offeredTitle || 'Skill A',
+            wantedTitle || 'Skill B',
+            duration,
+          );
+          for await (const chunk of generator) {
+            subscriber.next({ data: chunk } as MessageEvent);
+          }
+        } catch (e) {
+          subscriber.error(e);
+        } finally {
+          subscriber.next({ data: '[DONE]' } as MessageEvent);
           subscriber.complete();
         }
       })();
@@ -90,6 +123,7 @@ export class AiController {
         } catch (e) {
           subscriber.error(e);
         } finally {
+          subscriber.next({ data: '[DONE]' } as MessageEvent);
           subscriber.complete();
         }
       })();
@@ -103,5 +137,60 @@ export class AiController {
         return `${who}: ${m.content}`;
       })
       .join('\n');
+  }
+
+  @Public()
+  @Sse('session/:id/takeaways/stream')
+  streamTakeaways(@Param('id') sessionId: string, @Query('notes') notes: string): Observable<MessageEvent> {
+    return new Observable<MessageEvent>((subscriber) => {
+      (async () => {
+        try {
+          if (!notes || notes.trim().length < 5) {
+            subscriber.next({ data: 'Please add a few more notes so the AI can generate meaningful takeaways.' } as MessageEvent);
+            return;
+          }
+
+          const session = await this.sessionRepository.findOne({
+            where: { id: sessionId },
+            relations: ['skill1', 'skill2'],
+          });
+
+          if (!session) {
+            subscriber.next({ data: 'Session not found.' } as MessageEvent);
+            return;
+          }
+
+          const skillTitles = [
+            session.skill1?.title,
+            session.skill2?.title,
+          ].filter(Boolean) as string[];
+
+          const generator = this.aiService.streamTakeaways(notes, skillTitles);
+          for await (const chunk of generator) {
+            subscriber.next({ data: chunk } as MessageEvent);
+          }
+        } catch (e) {
+          subscriber.error(e);
+        } finally {
+          subscriber.next({ data: '[DONE]' } as MessageEvent);
+          subscriber.complete();
+        }
+      })();
+    });
+  }
+
+  @Public()
+  @Get('icebreaker')
+  async getIcebreaker(
+    @Query('wanted') wantedSkill: string,
+    @Query('offered') offeredSkill: string,
+    @Query('partner') partnerName: string,
+  ): Promise<{ message: string }> {
+    const message = await this.aiService.generateIcebreaker(
+      wantedSkill || 'a new skill',
+      offeredSkill || 'another skill',
+      partnerName || 'partner',
+    );
+    return { message };
   }
 }

@@ -67,6 +67,10 @@ export class Skill {
   @Column({ default: true })
   isActive: boolean;
 
+  @Field()
+  @Column({ default: 0 })
+  endorsementsCount: number;
+
   // Uses pgvector type.
   @Column({ type: 'vector', length: 768, nullable: true })
   embedding?: string; // TypeORM maps vector to string natively if you don't parse it

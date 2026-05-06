@@ -7,6 +7,7 @@ import { useMutation } from '@apollo/client/react';
 import { LOGIN, GUEST_LOGIN } from '@/graphql/mutations';
 import { useAuthStore } from '@/store/authStore';
 import { Mail, Lock, Loader2, UserCircle, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function LoginPage() {
   const loginStore = useAuthStore((s) => s.login);
@@ -20,7 +21,7 @@ export default function LoginPage() {
       loginStore(data.login.user);
       router.push('/dashboard');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message),
   });
 
   const [guestLogin, { loading: guestLoading }] = useMutation(GUEST_LOGIN, {
@@ -29,7 +30,7 @@ export default function LoginPage() {
       loginStore(data.guestLogin.user);
       router.push('/dashboard');
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -82,6 +83,14 @@ export default function LoginPage() {
               />
             </div>
           </label>
+
+          <button
+            type="button"
+            onClick={() => toast.info('Password reset coming soon')}
+            className="text-xs text-muted hover:text-accent transition-colors -mt-2 block text-right"
+          >
+            Forgot password?
+          </button>
 
           <button
             type="submit"

@@ -108,7 +108,7 @@ export class UserService {
   }
 
   async getUserStats(userId: string): Promise<UserStats> {
-    const [reviews, offeredCount, wantedCount, portfolios, completedSessions] = await Promise.all([
+    const [reviews, offeredCount, wantedCount, portfolios, completedSessions, totalEndorsements] = await Promise.all([
       this.reviewRepository.find({ where: { revieweeId: userId } }),
       this.skillRepository.count({ where: { userId, type: SkillType.OFFER } }),
       this.skillRepository.count({ where: { userId, type: SkillType.WANT } }),
@@ -124,6 +124,11 @@ export class UserService {
           statuses: [SessionStatus.COMPLETED, SessionStatus.REVIEWED],
         })
         .getCount(),
+      this.skillRepository
+        .createQueryBuilder('s')
+        .select('SUM(s."endorsementsCount")', 'total')
+        .where('s.userId = :userId', { userId })
+        .getRawOne<{ total: string }>(),
     ]);
 
     const reviewCount = reviews.length;
@@ -131,11 +136,14 @@ export class UserService {
       ? 0
       : reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviewCount;
 
-    // Trust score: blend of review quality, completed sessions, and portfolio richness.
-    const reviewSignal = Math.min(40, reviewCount * 4) * (averageRating / 5 || 0.5);
-    const sessionSignal = Math.min(30, completedSessions * 5);
-    const portfolioSignal = Math.min(30, portfolios * 6);
-    const trustScore = Math.round(reviewSignal + sessionSignal + portfolioSignal);
+    const endorsementCount = parseInt(totalEndorsements?.total || '0', 10) || 0;
+
+    // Trust score: blend of review quality, completed sessions, portfolio richness, and skill endorsements.
+    const reviewSignal = Math.min(35, reviewCount * 4) * (averageRating / 5 || 0.5);
+    const sessionSignal = Math.min(25, completedSessions * 5);
+    const portfolioSignal = Math.min(20, portfolios * 6);
+    const endorsementSignal = Math.min(20, endorsementCount * 10);
+    const trustScore = Math.round(reviewSignal + sessionSignal + portfolioSignal + endorsementSignal);
 
     return {
       reviewCount,
@@ -149,6 +157,7 @@ export class UserService {
         reviewSignal: Number(reviewSignal.toFixed(2)),
         sessionSignal: Number(sessionSignal.toFixed(2)),
         portfolioSignal: Number(portfolioSignal.toFixed(2)),
+        endorsementSignal: Number(endorsementSignal.toFixed(2)),
       },
     };
   }

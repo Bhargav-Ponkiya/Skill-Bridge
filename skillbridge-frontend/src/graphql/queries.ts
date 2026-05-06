@@ -120,6 +120,7 @@ export const GET_MY_SESSIONS = gql`
       p1Completed
       p2Completed
       checkpoints
+      version
       participant1Id
       participant2Id
       participant1 { id name avatar }
@@ -163,6 +164,7 @@ export const GET_SUGGESTED_MATCHES = gql`
       reason
       matchedWantSkillId
       matchedWantSkillTitle
+      reciprocalScore
       skill {
         id
         title
@@ -192,36 +194,86 @@ export const GET_SUGGESTED_MATCHES = gql`
   }
 `;
 
-export const SEARCH_SKILLS = gql`
-  query SearchSkills($query: String, $category: String, $type: String, $pagination: PaginationInput) {
-    searchSkills(query: $query, category: $category, type: $type, pagination: $pagination) {
+export const GET_SUGGESTED_MATCHES_EXPLORE = gql`
+  query GetSuggestedMatchesExplore($filter: SuggestedMatchesFilterInput) {
+    suggestedMatchesExplore(filter: $filter) {
       items {
         id
-        title
-        description
-        category
-        type
-        proficiencyLevel
-        user {
-          id
-          name
-          email
-          avatar
-          trustScore
-          reviewCount
-        }
-        portfolios {
+        score
+        reason
+        matchedWantSkillId
+        matchedWantSkillTitle
+        reciprocalScore
+        skill {
           id
           title
-          url
+          description
+          category
           type
+          proficiencyLevel
+          user {
+            id
+            name
+            email
+            avatar
+          }
+          portfolios {
+            id
+            title
+            url
+            type
+          }
+        }
+        affinityBreakdown {
+          semanticScore
+          categoryScore
+          depthBoost
         }
       }
       meta {
         totalItems
+        itemCount
+        itemsPerPage
         totalPages
         currentPage
       }
+    }
+  }
+`;
+
+export const SEARCH_SKILLS = gql`
+  query SearchSkills($query: String, $category: String, $type: String, $pagination: CursorPaginationInput) {
+    searchSkills(query: $query, category: $category, type: $type, pagination: $pagination) {
+      edges {
+        node {
+          id
+          title
+          description
+          category
+          type
+          proficiencyLevel
+          user {
+            id
+            name
+            email
+            avatar
+            trustScore
+            reviewCount
+          }
+          portfolios {
+            id
+            title
+            url
+            type
+          }
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
     }
   }
 `;
@@ -241,6 +293,7 @@ export const GET_SESSION = gql`
       checkpoints
       roadmap
       suggestedResources
+      version
       participant1Id
       participant2Id
       participant1 {

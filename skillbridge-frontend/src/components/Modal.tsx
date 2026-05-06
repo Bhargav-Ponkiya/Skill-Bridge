@@ -2,6 +2,7 @@
 
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 
 interface ModalProps {
@@ -31,18 +32,18 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof window === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-fg/40 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
-        className={cn('w-full surface rounded-2xl border shadow-2xl animate-slide-up', SIZE[size])}
+        className={cn('w-full surface rounded-2xl border shadow-2xl animate-in zoom-in-95 duration-200', SIZE[size])}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 p-6 border-b border-border">
+        <div className="flex items-start justify-between gap-4 p-6 border-b border-border/50">
           <div className="flex-1">
             <h2 className="text-xl font-bold text-fg">{title}</h2>
             {description && <p className="text-sm text-muted mt-1">{description}</p>}
@@ -57,6 +58,7 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
         </div>
         <div className="p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

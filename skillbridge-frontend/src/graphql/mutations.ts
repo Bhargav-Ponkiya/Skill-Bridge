@@ -201,6 +201,7 @@ export const UPDATE_SESSION = gql`
       duration
       format
       meetingLink
+      version
     }
   }
 `;
@@ -230,6 +231,25 @@ export const MARK_NOTIFICATION_READ = gql`
     markNotificationRead(id: $id) {
       id
       isRead
+    }
+  }
+`;
+
+export const CANCEL_MATCH_REQUEST = gql`
+  mutation CancelMatchRequest($requestId: String!) {
+    cancelMatchRequest(requestId: $requestId) {
+      id
+      status
+    }
+  }
+`;
+
+export const CANCEL_SESSION = gql`
+  mutation CancelSession($id: String!, $reason: String) {
+    cancelSession(id: $id, reason: $reason) {
+      id
+      status
+      summary
     }
   }
 `;

@@ -10,6 +10,9 @@ export class TrustBreakdown {
 
   @Field(() => Float)
   portfolioSignal: number;
+
+  @Field(() => Float)
+  endorsementSignal: number;
 }
 
 @ObjectType()

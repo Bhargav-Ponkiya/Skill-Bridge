@@ -1,12 +1,32 @@
-import { ObjectType, Field } from '@nestjs/graphql';
+import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { Skill } from '../skill.entity';
-import { PaginationMeta } from '../../../common/dto/pagination.dto';
+
+@ObjectType()
+export class SkillEdge {
+  @Field(() => Skill)
+  node: Skill;
+
+  @Field()
+  cursor: string;
+}
+
+@ObjectType()
+export class SkillPageInfo {
+  @Field()
+  hasNextPage: boolean;
+
+  @Field({ nullable: true })
+  endCursor?: string;
+}
 
 @ObjectType()
 export class PaginatedSkills {
-  @Field(() => [Skill])
-  items: Skill[];
+  @Field(() => [SkillEdge])
+  edges: SkillEdge[];
 
-  @Field(() => PaginationMeta)
-  meta: PaginationMeta;
+  @Field(() => SkillPageInfo)
+  pageInfo: SkillPageInfo;
+
+  @Field(() => Int)
+  totalCount: number;
 }

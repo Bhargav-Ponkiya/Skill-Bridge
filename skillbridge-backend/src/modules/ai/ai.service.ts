@@ -40,8 +40,8 @@ export class AiService {
     if (!this.hasApiKey) {
       return Array(768).fill(0).map(() => Math.random());
     }
-    // Use fallback models if the first one fails
-    const models = ['text-embedding-004', 'embedding-001'];
+    // Gemini updated their embedding model names in 2025
+    const models = ['text-embedding-004', 'models/text-embedding-004', 'embedding-001', 'models/embedding-001'];
     for (const modelName of models) {
       try {
         const model = this.genAI.getGenerativeModel({ model: modelName });
@@ -168,6 +168,37 @@ export class AiService {
       : 'AI summary is temporarily unavailable.';
   }
 
+  async *generateAgendaStream(
+    offeredTitle: string,
+    wantedTitle: string,
+    durationMinutes: number,
+  ): AsyncGenerator<string, void, unknown> {
+    const prompt = [
+      'You are creating a practical 3-step agenda for a 1-hour peer skill-exchange session.',
+      `One person teaches "${offeredTitle}" and the other teaches "${wantedTitle}".`,
+      `The session duration is ${durationMinutes} minutes.`,
+      '',
+      'Hard rules:',
+      '- Produce exactly 3 time-boxed steps covering BOTH skills equally.',
+      '- Include time allocations that add up to the session duration.',
+      '- Each step should describe what both participants do.',
+      '- Use markdown formatting with a brief intro and a short wrap-up note.',
+      '- Do not invent prerequisites or assume prior experience.',
+      '',
+      'Example format:',
+      '### Step 1: Foundations (0–15 min)',
+      '- Person A demonstrates core concepts of X',
+      '- Person B asks questions and tries the first exercise',
+      '',
+      '### Step 2: ...',
+      '',
+      '### Step 3: ...',
+      '',
+      'Keep it concise, actionable, and realistic for a peer-to-peer session.',
+    ].join('\n');
+    yield* this.streamPrompt(prompt, `agenda:${offeredTitle}:${wantedTitle}:${durationMinutes}`);
+  }
+
   async generateLearningInsights(
     skillTitle: string,
     proficiencyLevel: string,
@@ -212,6 +243,39 @@ export class AiService {
   async generateResources(skillTitle: string): Promise<any[]> {
     const insights = await this.generateLearningInsights(skillTitle, 'INTERMEDIATE');
     return insights.resources;
+  }
+
+  async *streamTakeaways(rawNotes: string, skillTitles: string[]): AsyncGenerator<string, void, unknown> {
+    const prompt = [
+      'You are a learning coach transforming rough post-session notes into polished takeaways.',
+      '',
+      `The session covered these skills: ${skillTitles.join(', ')}.`,
+      '',
+      'Transform the raw notes below into a clean, structured markdown summary with:',
+      '- A brief 1-sentence overview of what was covered',
+      '- Key learnings (bullet points)',
+      '- Actionable next steps (numbered)',
+      '- Resources or tools mentioned (if any)',
+      '',
+      'Keep it encouraging, concise, and practical. Do not invent skills or topics not implied by the notes.',
+      'If the notes are too sparse (e.g. less than 10 words), respond with a gentle encouragement to add more detail next time.',
+      '',
+      'Raw notes:',
+      rawNotes,
+    ].join('\n');
+    yield* this.streamPrompt(prompt, `takeaways:${rawNotes}`);
+  }
+
+  async generateIcebreaker(wantedSkill: string, offeredSkill: string, partnerName: string): Promise<string> {
+    const prompt = [
+      `Write a warm, 2-sentence opening message for a peer-to-peer skill exchange.`,
+      `The sender wants to learn "${wantedSkill}" from ${partnerName}.`,
+      `In return, they can teach "${offeredSkill}".`,
+      '',
+      'Tone: friendly, genuine, and enthusiastic — not salesy or overly formal.',
+      'Keep it under 60 words. Do not include greetings like "Hi" or "Hello" — just the message body.',
+    ].join('\n');
+    return this.getSinglePromptResponse(prompt, `icebreaker:${wantedSkill}:${offeredSkill}:${partnerName}`);
   }
 
   private async getSinglePromptResponse(prompt: string, cacheSeed: string): Promise<string> {

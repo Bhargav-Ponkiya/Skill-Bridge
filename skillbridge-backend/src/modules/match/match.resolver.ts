@@ -3,6 +3,8 @@ import { MatchRequest } from './match-request.entity';
 import { MatchService } from './match.service';
 import { CreateMatchRequestInput } from './dto/create-match-request.input';
 import { SuggestedMatch } from './dto/suggested-match.output';
+import { PaginatedSuggestedMatches } from './dto/paginated-suggested-matches.output';
+import { SuggestedMatchesFilterInput } from './dto/suggested-matches-filter.input';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { DataloaderService } from '../dataloader/dataloader.service';
 import { User } from '../user/user.entity';
@@ -34,10 +36,26 @@ export class MatchResolver {
   }
 
   @Query(() => [SuggestedMatch], {
-    description: 'Ranked OFFER skills from other users that match the current user\'s WANTs, scored 0-100.',
+    description: 'Top ranked OFFER skills from other users that match the current user\'s WANTs.',
   })
   async suggestedMatches(@CurrentUser() user: any): Promise<SuggestedMatch[]> {
     return this.matchService.getSuggestedMatches(user.id || user.sub);
+  }
+
+  @Query(() => PaginatedSuggestedMatches, {
+    description: 'Paginated and filterable suggested matches for the explore page.',
+  })
+  async suggestedMatchesExplore(
+    @CurrentUser() user: any,
+    @Args('filter', { nullable: true }) filter?: SuggestedMatchesFilterInput,
+  ): Promise<PaginatedSuggestedMatches> {
+    return this.matchService.getSuggestedMatchesPaginated(user.id || user.sub, {
+      page: filter?.page ?? 1,
+      limit: filter?.limit ?? 20,
+      category: filter?.category,
+      search: filter?.search,
+      minAffinity: filter?.minAffinity,
+    });
   }
 
   @Mutation(() => MatchRequest)
@@ -57,6 +75,14 @@ export class MatchResolver {
     return this.matchService.respondToMatchRequest(user.id || user.sub, requestId, accept);
   }
 
+  @Mutation(() => MatchRequest)
+  async cancelMatchRequest(
+    @CurrentUser() user: any,
+    @Args('requestId') requestId: string,
+  ): Promise<MatchRequest> {
+    return this.matchService.cancelMatchRequest(user.id || user.sub, requestId);
+  }
+
   @ResolveField(() => User, { nullable: true })
   async fromUser(@Parent() request: MatchRequest): Promise<User | null> {
     if (!request.fromUserId) return null;
@@ -72,13 +98,13 @@ export class MatchResolver {
   @ResolveField(() => Skill, { nullable: true })
   async offeredSkill(@Parent() request: MatchRequest): Promise<Skill | null> {
     if (!request.offeredSkillId) return null;
-    return this.skillRepository.findOne({ where: { id: request.offeredSkillId } });
+    return this.dataloaderService.skillLoader.load(request.offeredSkillId);
   }
 
   @ResolveField(() => Skill, { nullable: true })
   async wantedSkill(@Parent() request: MatchRequest): Promise<Skill | null> {
     if (!request.wantedSkillId) return null;
-    return this.skillRepository.findOne({ where: { id: request.wantedSkillId } });
+    return this.dataloaderService.skillLoader.load(request.wantedSkillId);
   }
 
   @ResolveField(() => Session, { nullable: true })

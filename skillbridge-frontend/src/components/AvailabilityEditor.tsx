@@ -6,6 +6,7 @@ import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { SET_AVAILABILITY } from '@/graphql/mutations';
 import { GET_ME } from '@/graphql/queries';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -30,7 +31,7 @@ export function AvailabilityEditor({ initial }: { initial: AvailabilitySlot[] })
   const [slots, setSlots] = useState<AvailabilitySlot[]>(initial ?? []);
   const [save, { loading }] = useMutation(SET_AVAILABILITY, {
     refetchQueries: [{ query: GET_ME }],
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   const addSlot = (day: number) => {

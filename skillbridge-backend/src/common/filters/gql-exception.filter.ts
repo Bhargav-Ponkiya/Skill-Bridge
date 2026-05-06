@@ -13,7 +13,13 @@ export class GqlExceptionFilter implements NestGqlExceptionFilter {
 
     if (exception instanceof Error) {
       const response = (exception as any).getResponse?.();
-      const message = typeof response === 'object' ? JSON.stringify(response) : exception.message;
+      let message = exception.message;
+      if (typeof response === 'object' && response !== null) {
+        // Extract clean message from NestJS exception response
+        message = Array.isArray(response.message)
+          ? response.message[0]
+          : (response.message ?? exception.message);
+      }
       
       this.logger.error(`Unhandled exception: ${message}`, exception.stack);
       

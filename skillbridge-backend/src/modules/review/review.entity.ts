@@ -57,6 +57,10 @@ export class Review {
   @Column({ type: 'text', nullable: true })
   comment?: string;
 
+  @Field({ defaultValue: false })
+  @Column({ default: false })
+  endorsedSkill: boolean;
+
   @Field()
   @CreateDateColumn()
   createdAt: Date;

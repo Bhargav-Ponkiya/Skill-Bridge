@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Compass,
   Users,
+  Briefcase,
   User,
   LogOut,
   Bell,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useQuery, useApolloClient } from '@apollo/client/react';
-import { GET_ME } from '@/graphql/queries';
+import { GET_ME, GET_MY_NOTIFICATIONS } from '@/graphql/queries';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { cn } from '@/lib/utils';
 
@@ -28,8 +29,32 @@ const NAV = [
   { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
   { name: 'Explore', icon: Compass, href: '/explore' },
   { name: 'Matches', icon: Users, href: '/matches' },
+  { name: 'Sessions', icon: Briefcase, href: '/sessions' },
+  { name: 'Notifications', icon: Bell, href: '/notifications' },
   { name: 'Profile', icon: User, href: '/profile' },
 ];
+
+function NavItem({ item, active, unreadCount }: { item: typeof NAV[number]; active: boolean; unreadCount?: number }) {
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative',
+        active
+          ? 'bg-accent-soft text-accent'
+          : 'text-muted hover:bg-surface-2 hover:text-fg',
+      )}
+    >
+      <item.icon className="w-4 h-4" />
+      {item.name}
+      {unreadCount !== undefined && unreadCount > 0 && (
+        <span className="ml-auto min-w-[20px] h-5 flex items-center justify-center rounded-full bg-danger text-white text-[10px] font-bold px-1.5 shadow-sm">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
@@ -49,6 +74,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
   };
 
   const { data: meData } = useQuery<any>(GET_ME, { skip: !user });
+  const { data: notifData } = useQuery<any>(GET_MY_NOTIFICATIONS, {
+    skip: !user,
+    pollInterval: 30000, // refresh every 30s
+  });
+  const unreadCount = (notifData?.myNotifications ?? []).filter((n: any) => !n.isRead).length;
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -84,24 +114,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </Link>
 
         <nav className="flex-1 px-3 space-y-1">
-          {NAV.map((item) => {
-            const active = pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                  active
-                    ? 'bg-accent-soft text-accent'
-                    : 'text-muted hover:bg-surface-2 hover:text-fg',
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.name}
-              </Link>
-            );
-          })}
+          {NAV.map((item) => (
+            <NavItem
+              key={item.name}
+              item={item}
+              active={pathname.startsWith(item.href)}
+              unreadCount={item.name === 'Notifications' ? unreadCount : undefined}
+            />
+          ))}
         </nav>
 
         <div className="p-3 border-t border-border space-y-3">
@@ -138,13 +158,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <div className="hidden lg:block flex-1" />
 
           <div className="flex items-center gap-2">
-            <Link
-              href="/notifications"
-              className="relative p-2 rounded-lg text-muted hover:text-fg hover:bg-surface-2 transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell className="w-5 h-5" />
-            </Link>
             <Link
               href="/profile"
               className="flex items-center gap-2 pl-2 lg:pl-3 lg:border-l border-border"
@@ -183,22 +196,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </div>
 
               <nav className="space-y-1 flex-1">
-                {NAV.map((item) => {
-                  const active = pathname.startsWith(item.href);
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                        active ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-surface-2 hover:text-fg',
-                      )}
-                    >
-                      <item.icon className="w-4 h-4" />
-                      {item.name}
-                    </Link>
-                  );
-                })}
+                {NAV.map((item) => (
+                  <NavItem
+                    key={item.name}
+                    item={item}
+                    active={pathname.startsWith(item.href)}
+                    unreadCount={item.name === 'Notifications' ? unreadCount : undefined}
+                  />
+                ))}
               </nav>
 
               <div className="space-y-3 pt-3 border-t border-border">

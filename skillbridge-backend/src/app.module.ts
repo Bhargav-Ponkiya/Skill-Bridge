@@ -5,9 +5,10 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { join } from 'path';
 import * as Joi from 'joi';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 import { appConfig } from './config/app.config';
-import { databaseConfig } from './config/database.config';
 import { redisConfig } from './config/redis.config';
 import { rabbitmqConfig } from './config/rabbitmq.config';
 import { HealthModule } from './health/health.module';
@@ -29,10 +30,13 @@ import { RateLimitGuard } from './modules/cache/rate-limit.guard';
 
 @Module({
   imports: [
+    // ────────────── Throttler ──────────────
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 50 }]),
+
     // ────────────── Config ──────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, redisConfig, rabbitmqConfig],
+      load: [appConfig, redisConfig, rabbitmqConfig],
       validationSchema: Joi.object({
         PORT: Joi.number().default(3001),
         NODE_ENV: Joi.string()
@@ -50,11 +54,13 @@ import { RateLimitGuard } from './modules/cache/rate-limit.guard';
     }),
 
     // ────────────── Database ──────────────
-    TypeOrmModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        ...config.get('database'),
-      }),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      url: process.env.DATABASE_URL,
+      ssl: false,
+      autoLoadEntities: true,
+      synchronize: process.env.NODE_ENV !== 'production',
+      logging: false,
     }),
 
     // ────────────── GraphQL ──────────────

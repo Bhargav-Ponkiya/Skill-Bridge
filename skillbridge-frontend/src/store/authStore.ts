@@ -23,7 +23,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true, // start loading until we check token/me API
   login: (user: User) => set({ user, isAuthenticated: true, isLoading: false }),
   logout: () => {
-    localStorage.removeItem('accessToken');
     set({ user: null, isAuthenticated: false, isLoading: false });
   },
   setLoading: (isLoading: boolean) => set({ isLoading }),

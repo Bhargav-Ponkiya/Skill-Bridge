@@ -52,6 +52,7 @@ input CreateMessageInput {
 
 input CreateReviewInput {
   comment: String
+  endorsedSkill: Boolean = false
   rating: Int!
   revieweeId: String!
   sessionId: String!
@@ -66,10 +67,20 @@ input CreateSkillInput {
   type: SkillType!
 }
 
+input CursorPaginationInput {
+  cursor: String
+  limit: Int! = 20
+}
+
 """
 A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
 """
 scalar DateTime
+
+"""
+The `JSONObject` scalar type represents JSON objects as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSONObject
 
 input LoginInput {
   email: String!
@@ -82,8 +93,10 @@ type MatchRequest {
   fromUserId: String!
   id: ID!
   message: String
+  messages: [Message!]
   offeredSkill: Skill
   offeredSkillId: String!
+  offeredSkillSnapshot: JSONObject
   session: Session
   status: MatchRequestStatus!
   toUser: User
@@ -91,10 +104,12 @@ type MatchRequest {
   updatedAt: DateTime!
   wantedSkill: Skill
   wantedSkillId: String!
+  wantedSkillSnapshot: JSONObject
 }
 
 enum MatchRequestStatus {
   ACCEPTED
+  CANCELLED
   DECLINED
   PENDING
 }
@@ -104,16 +119,20 @@ type Message {
   createdAt: DateTime!
   id: ID!
   isRead: Boolean!
+  matchRequest: MatchRequest
+  matchRequestId: String
   sender: User
   senderId: String!
   session: Session
-  sessionId: String!
+  sessionId: String
   updatedAt: DateTime!
 }
 
 type Mutation {
   addPortfolio(input: AddPortfolioInput!): Portfolio!
   addSkill(input: CreateSkillInput!): Skill!
+  cancelMatchRequest(requestId: String!): MatchRequest!
+  cancelSession(id: String!, reason: String): Session!
   changeSessionStatus(id: String!, status: SessionStatus!): Session!
   createReview(input: CreateReviewInput!): Review!
   deleteSkill(id: String!): Boolean!
@@ -122,7 +141,6 @@ type Mutation {
   logout: Boolean!
   markNotificationRead(id: String!): Notification!
   markSessionRead(sessionId: String!): Int!
-  refreshToken: AuthResponse!
   register(input: RegisterInput!): AuthResponse!
   removePortfolio(id: String!): Boolean!
   respondToMatchRequest(accept: Boolean!, requestId: String!): MatchRequest!
@@ -157,7 +175,13 @@ type PaginatedMatchRequests {
 }
 
 type PaginatedSkills {
-  items: [Skill!]!
+  edges: [SkillEdge!]!
+  pageInfo: SkillPageInfo!
+  totalCount: Int!
+}
+
+type PaginatedSuggestedMatches {
+  items: [SuggestedMatch!]!
   meta: PaginationMeta!
 }
 
@@ -202,13 +226,16 @@ type Query {
   """
   Search active skills offered by other users (excludes the current user).
   """
-  searchSkills(category: String, pagination: PaginationInput, query: String, type: String): PaginatedSkills!
+  searchSkills(category: String, pagination: CursorPaginationInput, query: String, type: String): PaginatedSkills!
   session(id: String!): Session!
 
   """
-  Ranked OFFER skills from other users that match the current user's WANTs, scored 0-100.
+  Top ranked OFFER skills from other users that match the current user's WANTs.
   """
   suggestedMatches: [SuggestedMatch!]!
+
+  """Paginated and filterable suggested matches for the explore page."""
+  suggestedMatchesExplore(filter: SuggestedMatchesFilterInput): PaginatedSuggestedMatches!
 
   """
   Look up a user by username (email local-part or display name) for the public profile page.
@@ -229,6 +256,7 @@ input RegisterInput {
 type Review {
   comment: String
   createdAt: DateTime!
+  endorsedSkill: Boolean!
   id: ID!
   rating: Int!
   reviewee: User
@@ -242,7 +270,7 @@ type Review {
 
 type Session {
   """JSON structure for session milestones"""
-  checkpoints: String
+  checkpoints: JSONObject
   createdAt: DateTime!
   duration: Float
   format: SessionFormat
@@ -267,9 +295,10 @@ type Session {
   status: SessionStatus!
 
   """JSON structure for AI-suggested learning resources"""
-  suggestedResources: String
+  suggestedResources: JSONObject
   summary: String
   updatedAt: DateTime!
+  version: Float!
 }
 
 enum SessionFormat {
@@ -280,6 +309,7 @@ enum SessionFormat {
 
 enum SessionStatus {
   ACTIVE
+  CANCELLED
   COMPLETED
   NEGOTIATING
   REVIEWED
@@ -290,6 +320,7 @@ type Skill {
   category: String!
   createdAt: DateTime!
   description: String
+  endorsementsCount: Float!
   id: ID!
   isActive: Boolean!
   portfolios: [Portfolio!]
@@ -299,6 +330,16 @@ type Skill {
   updatedAt: DateTime!
   user: User
   userId: String!
+}
+
+type SkillEdge {
+  cursor: String!
+  node: Skill!
+}
+
+type SkillPageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
 }
 
 enum SkillType {
@@ -315,7 +356,7 @@ type Subscription {
 }
 
 type SuggestedMatch {
-  """Breakdown of the affinity score."""
+  """Breakdown of the forward affinity score."""
   affinityBreakdown: AffinityBreakdown!
   id: String!
 
@@ -326,12 +367,24 @@ type SuggestedMatch {
   """Human-readable reason for this match"""
   reason: String!
 
-  """Affinity score 0-100 from semantic similarity"""
+  """Reverse direction score: how well your OFFER matches their WANT"""
+  reciprocalScore: Float
+
+  """Affinity score 0-100 from bidirectional matching"""
   score: Float!
   skill: Skill!
 }
 
+input SuggestedMatchesFilterInput {
+  category: String
+  limit: Int! = 20
+  minAffinity: Float
+  page: Int! = 1
+  search: String
+}
+
 type TrustBreakdown {
+  endorsementSignal: Float!
   portfolioSignal: Float!
   reviewSignal: Float!
   sessionSignal: Float!
@@ -365,6 +418,7 @@ input UpdateSessionInput {
   format: String
   meetingLink: String
   scheduledAt: DateTime
+  version: Int!
 }
 
 input UpdateSkillInput {

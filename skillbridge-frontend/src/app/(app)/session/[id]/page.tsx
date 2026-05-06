@@ -12,11 +12,14 @@ import {
   UPDATE_SESSION,
   CHANGE_SESSION_STATUS,
   TOGGLE_SESSION_PROGRESS,
+  CANCEL_SESSION,
 } from '@/graphql/mutations';
 import { SESSION_UPDATED_SUBSCRIPTION } from '@/graphql/subscriptions';
 import { overlappingSlots, formatSlot } from '@/components/AvailabilityEditor';
 import { ChatWindow } from '@/components/ChatWindow';
 import { SummaryPanel } from '@/components/SummaryPanel';
+import { VideoRoom } from '@/components/VideoRoom';
+import { Modal } from '@/components/Modal';
 import { toast } from 'sonner';
 import {
   Loader2,
@@ -34,6 +37,9 @@ import {
   Star,
   ExternalLink,
   ShieldCheck,
+  AlertTriangle,
+  Sparkles,
+  Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
@@ -44,9 +50,10 @@ const STATUS_TONE: Record<string, string> = {
   ACTIVE: 'bg-success/10 text-success border-success/20',
   COMPLETED: 'bg-surface-2 text-fg-soft border-border',
   REVIEWED: 'bg-surface-2 text-muted border-border',
+  CANCELLED: 'bg-danger/10 text-danger border-danger/20',
 };
 
-const STATUSES = ['NEGOTIATING', 'SCHEDULED', 'ACTIVE', 'COMPLETED', 'REVIEWED'] as const;
+const STATUSES = ['NEGOTIATING', 'SCHEDULED', 'ACTIVE', 'COMPLETED', 'REVIEWED', 'CANCELLED'] as const;
 
 interface SessionPageProps {
   params: Promise<{ id: string }>;
@@ -54,6 +61,10 @@ interface SessionPageProps {
 
 export default function SessionPage(props: SessionPageProps) {
   const { id } = use(props.params);
+  const [showVideo, setShowVideo] = useState(false);
+  const [takeawayNotes, setTakeawayNotes] = useState('');
+  const [takeawayResult, setTakeawayResult] = useState('');
+  const [isGeneratingTakeaways, setIsGeneratingTakeaways] = useState(false);
 
   const { data, loading, refetch } = useQuery<any>(GET_SESSION, { variables: { id } });
   const { data: meData } = useQuery<any>(GET_ME);
@@ -97,7 +108,7 @@ export default function SessionPage(props: SessionPageProps) {
   const myCompletion = isP1 ? session.p1Completed : session.p2Completed;
   const partnerCompletion = isP1 ? session.p2Completed : session.p1Completed;
 
-  const isLocked = session.status === 'COMPLETED' || session.status === 'REVIEWED';
+  const isLocked = ['ACTIVE', 'COMPLETED', 'REVIEWED', 'CANCELLED'].includes(session.status);
   const isReviewable = session.status === 'COMPLETED' || session.status === 'REVIEWED';
 
   return (
@@ -172,14 +183,50 @@ export default function SessionPage(props: SessionPageProps) {
         />
       </div>
 
-      <ScheduleCard session={session} onSaved={() => refetch()} isLocked={isLocked} />
+      <ScheduleCard
+        session={session}
+        onSaved={() => refetch()}
+        isLocked={isLocked}
+        partnerName={partner?.name}
+        skill1Title={session.skill1?.title}
+        skill2Title={session.skill2?.title}
+      />
 
-      <ActionRow session={session} myId={me?.id} onRefetch={refetch} />
+      <ActionRow
+        session={session}
+        myId={me?.id}
+        onRefetch={refetch}
+        myTeachSkill={myTeachSkill}
+        partnerTeachSkill={partnerTeachSkill}
+        partnerName={partner?.name}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-6">
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">Chat</h2>
-          <ChatWindow sessionId={id} />
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">Chat</h2>
+            {session.status === 'ACTIVE' && !showVideo && (
+              <button
+                onClick={() => setShowVideo(true)}
+                className="btn-primary !py-1.5 !px-3 flex items-center gap-1.5 text-xs"
+              >
+                <Video className="w-3.5 h-3.5" /> Join Video Session
+              </button>
+            )}
+            {showVideo && (
+              <button
+                onClick={() => setShowVideo(false)}
+                className="btn-secondary !py-1.5 !px-3 flex items-center gap-1.5 text-xs"
+              >
+                <Chat className="w-3.5 h-3.5" /> Back to Chat
+              </button>
+            )}
+          </div>
+          {showVideo ? (
+            <VideoRoom sessionId={id} />
+          ) : (
+            <ChatWindow sessionId={id} />
+          )}
         </div>
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">
@@ -197,6 +244,90 @@ export default function SessionPage(props: SessionPageProps) {
       </div>
 
       {partnerId && <PartnerReputation userId={partnerId} name={partner?.name} />}
+
+      {/* AI Takeaways - COMPLETED sessions */}
+      {session.status === 'COMPLETED' && (
+        <section className="surface border rounded-2xl p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-accent-soft text-accent flex items-center justify-center">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-fg">AI Post-Session Takeaways</h2>
+              <p className="text-xs text-muted">Drop your rough notes and get a polished summary.</p>
+            </div>
+          </div>
+
+          {!takeawayResult ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!takeawayNotes.trim()) return;
+                setIsGeneratingTakeaways(true);
+                setTakeawayResult('');
+
+                const url = `${process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001'}/ai/session/${id}/takeaways/stream?notes=${encodeURIComponent(takeawayNotes)}`;
+                const es = new EventSource(url);
+
+                es.onmessage = (event) => {
+                  if (event.data === '[DONE]') {
+                    es.close();
+                    setIsGeneratingTakeaways(false);
+                    return;
+                  }
+                  setTakeawayResult((prev) => prev + event.data);
+                };
+
+                es.onerror = () => {
+                  es.close();
+                  setIsGeneratingTakeaways(false);
+                  if (!takeawayResult) {
+                    toast.error('Failed to generate takeaways. Please try again.');
+                  }
+                };
+              }}
+              className="space-y-3"
+            >
+              <textarea
+                value={takeawayNotes}
+                onChange={(e) => setTakeawayNotes(e.target.value)}
+                placeholder="Jot down what you learned, what worked, what didn't…"
+                className="input-base min-h-[120px] resize-y"
+                maxLength={2000}
+              />
+              <button
+                type="submit"
+                disabled={!takeawayNotes.trim()}
+                className="btn-primary w-full disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" /> Generate Takeaways
+              </button>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-fg-soft leading-relaxed bg-surface-2 rounded-xl p-4">
+                <ReactMarkdown>{takeawayResult}</ReactMarkdown>
+              </div>
+              <button
+                onClick={() => {
+                  setTakeawayResult('');
+                  setTakeawayNotes('');
+                }}
+                className="btn-secondary w-full text-sm"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {isGeneratingTakeaways && (
+            <div className="flex items-center justify-center py-4 text-center space-y-2">
+              <Loader2 className="w-4 h-4 animate-spin text-accent" />
+              <p className="text-sm text-muted">AI is polishing your notes…</p>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* AI Roadmap & Resources - Only show when completed */}
       {session.status === 'COMPLETED' && (
@@ -338,9 +469,35 @@ function ExchangeSide({
   isMine?: boolean;
   partnerName?: string;
 }) {
-  const [toggle, { loading }] = useMutation(TOGGLE_SESSION_PROGRESS, {
+  const [toggle, { loading }] = useMutation<any>(TOGGLE_SESSION_PROGRESS, {
     onCompleted: () => onToggled?.(),
     onError: (err) => toast.error(err.message),
+    optimisticResponse: {
+      toggleSessionProgress: {
+        __typename: 'Session',
+        id: sessionId,
+        p1Completed: false,
+        p2Completed: false,
+        status: 'NEGOTIATING',
+      },
+    },
+    update(cache, { data }) {
+      const existing = cache.readQuery<any>({ query: GET_SESSION, variables: { id: sessionId } });
+      if (existing?.session && data?.toggleSessionProgress) {
+        cache.writeQuery({
+          query: GET_SESSION,
+          variables: { id: sessionId },
+          data: {
+            session: {
+              ...existing.session,
+              p1Completed: data.toggleSessionProgress.p1Completed,
+              p2Completed: data.toggleSessionProgress.p2Completed,
+              status: data.toggleSessionProgress.status,
+            },
+          },
+        });
+      }
+    },
   });
   return (
     <div
@@ -428,11 +585,18 @@ function ScheduleCard({
   session,
   onSaved,
   isLocked,
+  partnerName,
+  skill1Title,
+  skill2Title,
 }: {
   session: any;
   onSaved: () => void;
   isLocked: boolean;
+  partnerName?: string;
+  skill1Title?: string;
+  skill2Title?: string;
 }) {
+  const sessionActive = ['ACTIVE', 'COMPLETED', 'REVIEWED'].includes(session.status);
   const [scheduledAt, setScheduledAt] = useState<string>(
     session.scheduledAt ? toLocalInput(session.scheduledAt) : '',
   );
@@ -440,9 +604,28 @@ function ScheduleCard({
   const [format, setFormat] = useState<string>(session.format ?? 'VIDEO');
   const [meetingLink, setMeetingLink] = useState<string>(session.meetingLink ?? '');
 
+  const timezone = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      return 'Local';
+    }
+  }, []);
+
   const [updateSession, { loading }] = useMutation(UPDATE_SESSION, {
     onCompleted: onSaved,
     onError: (err) => toast.error(err.message),
+    optimisticResponse: {
+      updateSession: {
+        __typename: 'Session',
+        id: session.id,
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        duration: Number(duration),
+        format,
+        meetingLink: meetingLink.trim() || null,
+        version: session.version + 1,
+      },
+    },
   });
 
   const submit = (e: React.FormEvent) => {
@@ -464,10 +647,11 @@ function ScheduleCard({
       variables: {
         id: session.id,
         input: {
-          scheduledAt: new Date(scheduledAt).toISOString(),
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
           duration: Number(duration),
           format,
           meetingLink: meetingLink.trim() || undefined,
+          version: session.version,
         },
       },
     });
@@ -491,24 +675,44 @@ function ScheduleCard({
       </div>
       {overlap.length > 0 && (
         <div className="mb-4 rounded-xl border border-accent/30 bg-accent-soft/40 p-3 space-y-1.5">
-          <p className="text-[11px] font-semibold text-accent uppercase tracking-wider">
-            You're both free during
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-accent uppercase tracking-wider">
+              You're both free during
+            </p>
+            <span className="text-[10px] font-medium text-accent/80 bg-surface border border-accent/20 rounded-full px-2 py-0.5">
+              {timezone}
+            </span>
+          </div>
           <div className="flex flex-wrap gap-1.5">
-            {overlap.slice(0, 8).map((s, i) => (
-              <span
-                key={i}
-                className="text-xs font-medium text-fg bg-surface border border-border rounded-md px-2 py-0.5"
-              >
-                {formatSlot(s)}
-              </span>
-            ))}
+            {overlap.slice(0, 8).map((s, i) => {
+              const now = new Date();
+              const diff = s.day - now.getDay();
+              const slotDate = new Date(now);
+              slotDate.setDate(now.getDate() + (diff >= 0 ? diff : diff + 7));
+              slotDate.setHours(Math.floor(s.startMinute / 60), s.startMinute % 60, 0, 0);
+              const localValue = toLocalInput(slotDate.toISOString());
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setScheduledAt(localValue)}
+                  className="text-xs font-medium text-fg bg-surface border border-border rounded-md px-2 py-0.5 hover:border-accent hover:bg-accent-soft/60 transition-colors cursor-pointer"
+                >
+                  {formatSlot(s)}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
       <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <label className="block">
-          <span className="label-base">When</span>
+          <span className="label-base flex items-center gap-2">
+            When
+            <span className="text-[10px] font-medium text-muted bg-surface-2 border border-border rounded-full px-1.5 py-0.5">
+              {timezone}
+            </span>
+          </span>
           <input
             type="datetime-local"
             value={scheduledAt}
@@ -582,9 +786,54 @@ function ScheduleCard({
             className="btn-primary !py-2 disabled:opacity-50 flex items-center gap-2"
           >
             {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            Save logistics
+            {sessionActive ? 'Logistics locked' : 'Save logistics'}
           </button>
         </div>
+        {session.status === 'SCHEDULED' && session.scheduledAt && (
+          <div className="md:col-span-2 lg:col-span-4 pt-2 border-t border-border">
+            <button
+              type="button"
+              onClick={() => {
+                const start = new Date(session.scheduledAt);
+                const end = new Date(start.getTime() + (session.duration || 60) * 60000);
+                const pad = (n: number) => String(n).padStart(2, '0');
+                const fmt = (d: Date) =>
+                  `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+
+                const ics = [
+                  'BEGIN:VCALENDAR',
+                  'VERSION:2.0',
+                  'PRODID:-//SkillBridge//EN',
+                  'BEGIN:VEVENT',
+                  `DTSTART:${fmt(start)}`,
+                  `DTEND:${fmt(end)}`,
+                  `SUMMARY:SkillBridge: ${skill1Title || 'Skill 1'} ↔ ${skill2Title || 'Skill 2'}`,
+                  `DESCRIPTION:Skill exchange session with ${partnerName || 'your partner'}\\nYou teach: ${skill1Title || '?'}\\nYou learn: ${skill2Title || '?'}`,
+                  meetingLink ? `URL:${meetingLink}` : '',
+                  `UID:skillbridge-${session.id}@skillbridge.local`,
+                  'STATUS:CONFIRMED',
+                  'END:VEVENT',
+                  'END:VCALENDAR',
+                ].filter(Boolean).join('\r\n');
+
+                const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `skillbridge-session-${session.id}.ics`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                toast.success('Calendar event downloaded!');
+              }}
+              className="btn-secondary flex items-center gap-1.5 !py-2 w-full justify-center"
+            >
+              <Download className="w-4 h-4" />
+              Add to Calendar
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );
@@ -594,24 +843,92 @@ function ActionRow({
   session,
   myId,
   onRefetch,
+  myTeachSkill,
+  partnerTeachSkill,
+  partnerName,
 }: {
   session: any;
   myId?: string;
   onRefetch: () => void;
+  myTeachSkill: any;
+  partnerTeachSkill: any;
+  partnerName?: string;
 }) {
-  const [changeStatus, { loading }] = useMutation(CHANGE_SESSION_STATUS, {
+  const [changeStatus, { loading: changing }] = useMutation(CHANGE_SESSION_STATUS, {
     onCompleted: () => onRefetch(),
     onError: (err) => toast.error(err.message),
   });
-  const [toggleProgress, { loading: toggling }] = useMutation(TOGGLE_SESSION_PROGRESS, {
+  const [toggleProgress, { loading: toggling }] = useMutation<any>(TOGGLE_SESSION_PROGRESS, {
     onCompleted: () => onRefetch(),
+    onError: (err) => toast.error(err.message),
+  });
+  const [cancelSession, { loading: cancelling }] = useMutation(CANCEL_SESSION, {
+    onCompleted: () => {
+      setShowCancelModal(false);
+      setCancelReason('');
+      onRefetch();
+      toast.success('Session cancelled.');
+    },
     onError: (err) => toast.error(err.message),
   });
 
   const isP1 = session.participant1Id === myId;
   const myCompletion = isP1 ? session.p1Completed : session.p2Completed;
+  const canCancel = ['NEGOTIATING', 'SCHEDULED'].includes(session.status);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [showAgendaModal, setShowAgendaModal] = useState(false);
+  const [agendaContent, setAgendaContent] = useState('');
+  const [agendaLoading, setAgendaLoading] = useState(false);
+
+  const handleGenerateAgenda = () => {
+    setShowAgendaModal(true);
+    setAgendaContent('');
+    setAgendaLoading(true);
+
+    const offered = myTeachSkill?.title || 'Skill A';
+    const wanted = partnerTeachSkill?.title || 'Skill B';
+    const duration = session.duration || 60;
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const params = new URLSearchParams({ offered, wanted, duration: String(duration) });
+    const url = `${baseURL}/ai/agenda?${params.toString()}`;
+
+    const eventSource = new EventSource(url);
+    eventSource.onmessage = (event) => {
+      if (event.data === '[DONE]') {
+        eventSource.close();
+        setAgendaLoading(false);
+        return;
+      }
+      setAgendaContent((prev) => prev + event.data);
+    };
+    eventSource.onerror = () => {
+      eventSource.close();
+      setAgendaLoading(false);
+      toast.error('Failed to generate agenda. Please try again.');
+    };
+  };
+
+  const handleCancel = () => {
+    if (!cancelReason.trim()) {
+      toast.error('Please provide a reason for cancelling.');
+      return;
+    }
+    cancelSession({
+      variables: { id: session.id, reason: cancelReason.trim() },
+      optimisticResponse: {
+        cancelSession: {
+          __typename: 'Session',
+          id: session.id,
+          status: 'CANCELLED',
+          summary: null,
+        },
+      },
+    });
+  };
 
   return (
+    <>
     <div className="surface border rounded-2xl p-5 flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
       <div className="flex items-start gap-3">
         <ShieldCheck className="w-5 h-5 text-accent shrink-0" />
@@ -625,8 +942,17 @@ function ActionRow({
       <div className="flex flex-wrap gap-2">
         {session.status === 'NEGOTIATING' && session.scheduledAt && session.format && (
           <button
-            onClick={() => changeStatus({ variables: { id: session.id, status: 'SCHEDULED' } })}
-            disabled={loading}
+            onClick={() => changeStatus({
+              variables: { id: session.id, status: 'SCHEDULED' },
+              optimisticResponse: {
+                changeSessionStatus: {
+                  __typename: 'Session',
+                  id: session.id,
+                  status: 'SCHEDULED',
+                },
+              },
+            })}
+            disabled={changing}
             className="btn-secondary flex items-center gap-1.5 !py-2"
           >
             <Calendar className="w-3.5 h-3.5" /> Confirm schedule
@@ -634,8 +960,17 @@ function ActionRow({
         )}
         {session.status === 'SCHEDULED' && (
           <button
-            onClick={() => changeStatus({ variables: { id: session.id, status: 'ACTIVE' } })}
-            disabled={loading}
+            onClick={() => changeStatus({
+              variables: { id: session.id, status: 'ACTIVE' },
+              optimisticResponse: {
+                changeSessionStatus: {
+                  __typename: 'Session',
+                  id: session.id,
+                  status: 'ACTIVE',
+                },
+              },
+            })}
+            disabled={changing}
             className="btn-primary flex items-center gap-1.5 !py-2"
           >
             <Play className="w-3.5 h-3.5" /> Start session
@@ -643,7 +978,29 @@ function ActionRow({
         )}
         {(session.status === 'SCHEDULED' || session.status === 'ACTIVE') && (
           <button
-            onClick={() => toggleProgress({ variables: { id: session.id } })}
+            onClick={() => toggleProgress({
+              variables: { id: session.id },
+              optimisticResponse: {
+                toggleSessionProgress: {
+                  __typename: 'Session',
+                  id: session.id,
+                  p1Completed: !myCompletion,
+                  p2Completed: session.p2Completed,
+                  status: session.status,
+                },
+              },
+              update(cache, { data }) {
+                if (data?.toggleSessionProgress) {
+                  cache.modify({
+                    id: cache.identify({ __typename: 'Session', id: session.id }),
+                    fields: {
+                      p1Completed: () => data.toggleSessionProgress.p1Completed,
+                      p2Completed: () => data.toggleSessionProgress.p2Completed,
+                    },
+                  });
+                }
+              },
+            })}
             disabled={toggling}
             className={cn(
               'btn-secondary !py-2 flex items-center gap-1.5',
@@ -658,8 +1015,114 @@ function ActionRow({
             {myCompletion ? 'Undo my completion' : 'Mark my part complete'}
           </button>
         )}
+        {(session.status === 'NEGOTIATING' || session.status === 'SCHEDULED') && (
+          <button
+            onClick={handleGenerateAgenda}
+            className="btn-secondary !py-2 flex items-center gap-1.5 text-accent border-accent/30 hover:bg-accent/10"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Generate AI Agenda
+          </button>
+        )}
+        {canCancel && (
+          <button
+            onClick={() => setShowCancelModal(true)}
+            className="btn-secondary !py-2 flex items-center gap-1.5 text-danger border-danger/30 hover:bg-danger/10"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" /> Cancel session
+          </button>
+        )}
       </div>
     </div>
+
+    <Modal
+      open={showCancelModal}
+      onClose={() => { setShowCancelModal(false); setCancelReason(''); }}
+      title="Cancel session"
+      description="This will notify your partner and close the session."
+      size="sm"
+    >
+      <div className="space-y-4">
+        <label className="block space-y-2">
+          <span className="label-base">Reason for cancellation</span>
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            rows={3}
+            placeholder="e.g., Scheduling conflict, already learned the skill..."
+            className="input-base"
+            maxLength={300}
+          />
+        </label>
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => { setShowCancelModal(false); setCancelReason(''); }}
+            className="btn-secondary"
+          >
+            Go back
+          </button>
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="btn-primary flex items-center gap-2 bg-danger hover:bg-danger/90 border-danger"
+          >
+            {cancelling && <Loader2 className="w-4 h-4 animate-spin" />}
+            Confirm cancel
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    <Modal
+      open={showAgendaModal}
+      onClose={() => { setShowAgendaModal(false); setAgendaContent(''); }}
+      title="AI Session Agenda"
+      description={`Suggested structure for your ${session.duration || 60}-minute exchange.`}
+      size="md"
+    >
+      <div className="space-y-4">
+        {agendaLoading && !agendaContent && (
+          <div className="flex flex-col items-center justify-center py-8 space-y-3">
+            <Loader2 className="w-6 h-6 animate-spin text-accent" />
+            <p className="text-sm text-muted">Crafting your agenda...</p>
+          </div>
+        )}
+        {agendaContent && (
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown>{agendaContent}</ReactMarkdown>
+          </div>
+        )}
+        {agendaLoading && agendaContent && (
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Streaming...
+          </div>
+        )}
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => { setShowAgendaModal(false); setAgendaContent(''); }}
+            className="btn-secondary"
+          >
+            Close
+          </button>
+          {agendaContent && !agendaLoading && (
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(agendaContent);
+                toast.success('Agenda copied to clipboard!');
+              }}
+              className="btn-primary flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" /> Copy
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+    </>
   );
 }
 

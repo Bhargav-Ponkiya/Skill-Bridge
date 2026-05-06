@@ -1,12 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, OnApplicationBootstrap, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger, OnApplicationBootstrap, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PubSub } from 'graphql-subscriptions';
 import { Session, SessionStatus } from './session.entity';
 import { UpdateSessionInput } from './dto/update-session.input';
 import { MatchRequest, MatchRequestStatus } from '../match/match-request.entity';
 import { AiService } from '../ai/ai.service';
 import { Skill } from '../skill/skill.entity';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../notification/notification.entity';
 
 @Injectable()
 export class SessionService implements OnApplicationBootstrap {
@@ -21,6 +24,8 @@ export class SessionService implements OnApplicationBootstrap {
     private skillRepository: Repository<Skill>,
     @Inject('PUB_SUB') private readonly pubSub: PubSub,
     private readonly aiService: AiService,
+    private readonly notificationService: NotificationService,
+    private readonly dataSource: DataSource,
   ) {}
 
   private async saveAndBroadcast(session: Session): Promise<Session> {
@@ -106,6 +111,49 @@ export class SessionService implements OnApplicationBootstrap {
     input: UpdateSessionInput,
   ): Promise<Session> {
     const session = await this.getSession(userId, sessionId);
+
+    if (session.version !== input.version) {
+      throw new ConflictException('Session was updated by your partner. Please refresh.');
+    }
+
+    if (
+      session.status === SessionStatus.ACTIVE ||
+      session.status === SessionStatus.COMPLETED ||
+      session.status === SessionStatus.REVIEWED
+    ) {
+      throw new BadRequestException('Logistics cannot be changed once the session has started.');
+    }
+
+    // CON-1: Double-booking prevention — if scheduledAt changes, ensure neither participant
+    // has another SCHEDULED or ACTIVE session within +/- 60 minutes.
+    if (input.scheduledAt) {
+      const proposedTime = new Date(input.scheduledAt);
+      const windowStart = new Date(proposedTime.getTime() - 60 * 60 * 1000);
+      const windowEnd = new Date(proposedTime.getTime() + 60 * 60 * 1000);
+
+      const conflicting = await this.sessionRepository
+        .createQueryBuilder('s')
+        .where(
+          '(s.participant1Id = :p1 OR s.participant2Id = :p1 OR s.participant1Id = :p2 OR s.participant2Id = :p2)',
+          { p1: session.participant1Id, p2: session.participant2Id },
+        )
+        .andWhere('s.id != :currentId', { currentId: sessionId })
+        .andWhere('s.status IN (:...statuses)', {
+          statuses: [SessionStatus.SCHEDULED, SessionStatus.ACTIVE],
+        })
+        .andWhere('s."scheduledAt" IS NOT NULL')
+        .andWhere('s."scheduledAt" BETWEEN :start AND :end', {
+          start: windowStart,
+          end: windowEnd,
+        })
+        .getOne();
+
+      if (conflicting) {
+        throw new ConflictException('Time slot is double-booked');
+      }
+    }
+
+    const wasNegotiating = session.status === SessionStatus.NEGOTIATING;
     Object.assign(session, input);
 
     if (
@@ -116,7 +164,29 @@ export class SessionService implements OnApplicationBootstrap {
       session.status = SessionStatus.SCHEDULED;
     }
 
-    return this.saveAndBroadcast(session);
+    const saved = await this.saveAndBroadcast(session);
+
+    const partnerId = session.participant1Id === userId ? session.participant2Id : session.participant1Id;
+
+    if (input.scheduledAt || input.format) {
+      await this.notificationService.create({
+        userId: partnerId,
+        type: NotificationType.MATCH_ACCEPTED,
+        title: 'Session Updated',
+        message: 'Your partner updated the session logistics.',
+        relatedId: sessionId,
+      });
+    } else if (wasNegotiating && session.status === SessionStatus.SCHEDULED) {
+      await this.notificationService.create({
+        userId: partnerId,
+        type: NotificationType.MATCH_ACCEPTED,
+        title: 'Session Scheduled',
+        message: `Your session is now ${SessionStatus.SCHEDULED}.`,
+        relatedId: sessionId,
+      });
+    }
+
+    return saved;
   }
 
   async advanceSessionStatus(
@@ -127,11 +197,12 @@ export class SessionService implements OnApplicationBootstrap {
     const session = await this.getSession(userId, sessionId);
 
     const allowed: Record<SessionStatus, SessionStatus[]> = {
-      [SessionStatus.NEGOTIATING]: [SessionStatus.SCHEDULED, SessionStatus.ACTIVE],
-      [SessionStatus.SCHEDULED]: [SessionStatus.ACTIVE, SessionStatus.NEGOTIATING],
-      [SessionStatus.ACTIVE]: [SessionStatus.COMPLETED],
+      [SessionStatus.NEGOTIATING]: [SessionStatus.SCHEDULED, SessionStatus.ACTIVE, SessionStatus.CANCELLED],
+      [SessionStatus.SCHEDULED]: [SessionStatus.ACTIVE, SessionStatus.NEGOTIATING, SessionStatus.CANCELLED],
+      [SessionStatus.ACTIVE]: [SessionStatus.COMPLETED, SessionStatus.CANCELLED],
       [SessionStatus.COMPLETED]: [SessionStatus.REVIEWED],
       [SessionStatus.REVIEWED]: [],
+      [SessionStatus.CANCELLED]: [],
     };
 
     if (!allowed[session.status]?.includes(targetStatus)) {
@@ -140,8 +211,24 @@ export class SessionService implements OnApplicationBootstrap {
       );
     }
 
+    // CON-2: Cannot move to ACTIVE without a scheduled time.
+    if (targetStatus === SessionStatus.ACTIVE && !session.scheduledAt) {
+      throw new BadRequestException('Session must be scheduled before it can be started.');
+    }
+
     session.status = targetStatus;
-    return this.saveAndBroadcast(session);
+    const saved = await this.saveAndBroadcast(session);
+
+    const partnerId = session.participant1Id === userId ? session.participant2Id : session.participant1Id;
+    await this.notificationService.create({
+      userId: partnerId,
+      type: targetStatus === SessionStatus.ACTIVE ? NotificationType.SESSION_REMINDER : NotificationType.SESSION_COMPLETED,
+      title: 'Status Changed',
+      message: `Your session is now ${targetStatus}.`,
+      relatedId: sessionId,
+    });
+
+    return saved;
   }
 
   /**
@@ -161,18 +248,135 @@ export class SessionService implements OnApplicationBootstrap {
       session.p2Completed = !session.p2Completed;
     }
 
+    const partnerId = session.participant1Id === userId ? session.participant2Id : session.participant1Id;
+
     if (session.p1Completed && session.p2Completed) {
       session.status = SessionStatus.COMPLETED;
       // Fire and forget: generate AI insights in the background.
       this.generatePostSessionInsights(session.id).catch((err) =>
         this.logger.error(`Failed to generate insights for session ${session.id}`, err),
       );
+      await this.saveAndBroadcast(session);
+      await this.notificationService.create({
+        userId: partnerId,
+        type: NotificationType.SESSION_COMPLETED,
+        title: 'Session Completed',
+        message: 'Your session is now COMPLETED.',
+        relatedId: sessionId,
+      });
     } else if (session.status === SessionStatus.SCHEDULED) {
       // Once at least one side flips, treat the exchange as in flight.
       session.status = SessionStatus.ACTIVE;
+      await this.saveAndBroadcast(session);
+      await this.notificationService.create({
+        userId: partnerId,
+        type: NotificationType.SESSION_REMINDER,
+        title: 'Session Active',
+        message: 'Your partner marked their part complete. Session is now ACTIVE.',
+        relatedId: sessionId,
+      });
+    } else {
+      await this.saveAndBroadcast(session);
+      const myCompletion = session.participant1Id === userId ? session.p1Completed : session.p2Completed;
+      await this.notificationService.create({
+        userId: partnerId,
+        type: NotificationType.MATCH_ACCEPTED,
+        title: 'Progress Update',
+        message: myCompletion
+          ? 'Your partner marked their part complete.'
+          : 'Your partner undone their completion.',
+        relatedId: sessionId,
+      });
     }
 
-    return this.saveAndBroadcast(session);
+    return session;
+  }
+
+  async cancelSession(userId: string, sessionId: string, reason: string): Promise<Session> {
+    const session = await this.getSession(userId, sessionId);
+
+    if (
+      session.status !== SessionStatus.NEGOTIATING &&
+      session.status !== SessionStatus.SCHEDULED
+    ) {
+      throw new BadRequestException('Only negotiating or scheduled sessions can be cancelled.');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      session.status = SessionStatus.CANCELLED;
+      session.summary = reason || 'Session cancelled by user.';
+
+      const saved = await queryRunner.manager.save(session);
+
+      const partnerId = session.participant1Id === userId ? session.participant2Id : session.participant1Id;
+      await this.notificationService.create({
+        userId: partnerId,
+        type: NotificationType.SESSION_COMPLETED,
+        title: 'Session Cancelled',
+        message: reason || 'Your partner cancelled the session.',
+        relatedId: sessionId,
+      });
+
+      await queryRunner.commitTransaction();
+      return saved;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Cron job: runs every day at midnight to auto-cancel stale negotiating sessions.
+   * Sessions stuck in NEGOTIATING for more than 14 days are cancelled and both parties notified.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async autoCancelStaleSessions(): Promise<void> {
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+    const staleSessions = await this.sessionRepository.find({
+      where: {
+        status: SessionStatus.NEGOTIATING,
+        updatedAt: new Date(fourteenDaysAgo.toISOString()),
+      },
+      relations: ['participant1', 'participant2'],
+    });
+
+    if (staleSessions.length === 0) return;
+
+    this.logger.log(`Auto-cancelling ${staleSessions.length} stale negotiating sessions`);
+
+    for (const session of staleSessions) {
+      session.status = SessionStatus.CANCELLED;
+      session.summary = 'Auto-cancelled: session inactive for 14 days.';
+      await this.sessionRepository.save(session);
+
+      try {
+        await this.notificationService.create({
+          userId: session.participant1Id,
+          type: NotificationType.SESSION_COMPLETED,
+          title: 'Session expired',
+          message: `Your session with ${session.participant2?.name ?? 'your partner'} was auto-cancelled after 14 days of inactivity.`,
+          relatedId: session.id,
+        });
+
+        await this.notificationService.create({
+          userId: session.participant2Id,
+          type: NotificationType.SESSION_COMPLETED,
+          title: 'Session expired',
+          message: `Your session with ${session.participant1?.name ?? 'your partner'} was auto-cancelled after 14 days of inactivity.`,
+          relatedId: session.id,
+        });
+      } catch (err) {
+        this.logger.error(`Failed to send expiration notifications for session ${session.id}`, err);
+      }
+    }
   }
 
   private async generatePostSessionInsights(sessionId: string): Promise<void> {

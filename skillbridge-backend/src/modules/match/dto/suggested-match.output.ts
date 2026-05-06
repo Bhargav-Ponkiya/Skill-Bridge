@@ -21,7 +21,7 @@ export class SuggestedMatch {
   @Field(() => Skill)
   skill: Skill;
 
-  @Field(() => Float, { description: 'Affinity score 0-100 from semantic similarity' })
+  @Field(() => Float, { description: 'Affinity score 0-100 from bidirectional matching' })
   score: number;
 
   @Field({ description: 'Human-readable reason for this match' })
@@ -33,6 +33,9 @@ export class SuggestedMatch {
   @Field({ nullable: true })
   matchedWantSkillTitle?: string;
 
-  @Field(() => AffinityBreakdown, { description: 'Breakdown of the affinity score.' })
+  @Field(() => Float, { nullable: true, description: 'Reverse direction score: how well your OFFER matches their WANT' })
+  reciprocalScore?: number;
+
+  @Field(() => AffinityBreakdown, { description: 'Breakdown of the forward affinity score.' })
   affinityBreakdown: AffinityBreakdown;
 }

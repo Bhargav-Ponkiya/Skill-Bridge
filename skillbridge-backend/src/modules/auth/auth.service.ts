@@ -19,17 +19,13 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  generateTokens(user: User): { accessToken: string; refreshToken: string } {
+  generateTokens(user: User): { accessToken: string } {
     const payload: JwtPayload = { sub: user.id, email: user.email };
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('app.jwtSecret')!,
       expiresIn: this.configService.get<string>('app.jwtAccessExpiry') as any,
     });
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('app.jwtRefreshSecret')!,
-      expiresIn: this.configService.get<string>('app.jwtRefreshExpiry') as any,
-    });
-    return { accessToken, refreshToken };
+    return { accessToken };
   }
 
   async register(input: RegisterInput): Promise<AuthResponse> {
@@ -79,21 +75,6 @@ export class AuthService {
 
     const { accessToken } = this.generateTokens(user);
     return { accessToken, user };
-  }
-
-  async validateRefreshToken(refreshToken: string): Promise<AuthResponse> {
-    try {
-      const payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get<string>('app.jwtRefreshSecret'),
-      });
-      const user = await this.userRepository.findOne({ where: { id: payload.sub } });
-      if (!user) throw new UnauthorizedException('Invalid token');
-
-      const { accessToken: newAccessToken } = this.generateTokens(user);
-      return { accessToken: newAccessToken, user };
-    } catch {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
   }
 
   async me(userId: string): Promise<User> {

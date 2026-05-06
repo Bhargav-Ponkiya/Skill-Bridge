@@ -53,6 +53,15 @@ export class SessionResolver {
     return this.sessionService.toggleSessionProgress(user.id || user.sub, id);
   }
 
+  @Mutation(() => Session)
+  async cancelSession(
+    @CurrentUser() user: any,
+    @Args('id') id: string,
+    @Args('reason', { nullable: true }) reason?: string,
+  ): Promise<Session> {
+    return this.sessionService.cancelSession(user.id || user.sub, id, reason ?? '');
+  }
+
   @ResolveField(() => User)
   async participant1(@Parent() session: Session): Promise<User> {
     return this.dataloaderService.userLoader.load(session.participant1Id);

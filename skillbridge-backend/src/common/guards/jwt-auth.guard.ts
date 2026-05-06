@@ -11,7 +11,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   canActivate(context: ExecutionContext) {
-    // Skip authentication for RabbitMQ/Microservice handlers
     if (context.getType() === 'rpc') return true;
 
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -19,6 +18,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getClass(),
     ]);
     if (isPublic) return true;
+
     return super.canActivate(context);
   }
 
@@ -27,6 +27,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       const ctx = GqlExecutionContext.create(context);
       return ctx.getContext().req;
     }
-    return context.switchToHttp().getRequest();
+    return context.switchToHttp().getRequest() ?? { headers: {} };
   }
 }

@@ -4,9 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
 import { GET_MY_MATCH_REQUESTS, GET_MY_SESSIONS, GET_ME } from '@/graphql/queries';
-import { RESPOND_TO_MATCH_REQUEST } from '@/graphql/mutations';
+import { RESPOND_TO_MATCH_REQUEST, CANCEL_MATCH_REQUEST } from '@/graphql/mutations';
 import { MATCH_REQUEST_UPDATED_SUBSCRIPTION } from '@/graphql/subscriptions';
-import { Inbox, Send, Loader2, ArrowRight, Check, X, ExternalLink, Users } from 'lucide-react';
+import { Inbox, Send, Loader2, ArrowRight, Check, X, ExternalLink, Users, Undo2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 type Tab = 'received' | 'sent';
@@ -15,6 +16,7 @@ const STATUS_TONE: Record<string, string> = {
   PENDING: 'bg-warning/10 text-warning border-warning/20',
   ACCEPTED: 'bg-success/10 text-success border-success/20',
   DECLINED: 'bg-danger/10 text-danger border-danger/20',
+  CANCELLED: 'bg-surface-2 text-muted border-border',
 };
 
 export default function MatchesPage() {
@@ -40,7 +42,15 @@ export default function MatchesPage() {
   const [respond, { loading: responding }] = useMutation(RESPOND_TO_MATCH_REQUEST, {
     onCompleted: () => refetch(),
     refetchQueries: [{ query: GET_MY_SESSIONS }],
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
+  });
+
+  const [cancel, { loading: cancelling }] = useMutation(CANCEL_MATCH_REQUEST, {
+    onCompleted: () => {
+      refetch();
+      toast.success('Request withdrawn successfully.');
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   const requests = data?.myMatchRequests?.items ?? [];
@@ -172,6 +182,15 @@ export default function MatchesPage() {
                         <Check className="w-4 h-4" /> Accept
                       </button>
                     </div>
+                  ) : tab === 'sent' && req.status === 'PENDING' ? (
+                    <button
+                      type="button"
+                      onClick={() => cancel({ variables: { requestId: req.id } })}
+                      disabled={cancelling}
+                      className="btn-secondary w-full !py-2 flex items-center justify-center gap-1.5"
+                    >
+                      <Undo2 className="w-4 h-4" /> Withdraw
+                    </button>
                   ) : req.status === 'ACCEPTED' && req.session?.id ? (
                     <Link
                       href={`/session/${req.session.id}`}

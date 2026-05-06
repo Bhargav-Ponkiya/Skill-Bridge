@@ -12,7 +12,9 @@ import {
 import { SEND_MATCH_REQUEST } from '@/graphql/mutations';
 import { useAuthStore } from '@/store/authStore';
 import { Sparkles, Plus, ArrowRight, Inbox, Loader2, Zap, MessageCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Modal } from '@/components/Modal';
+import { DashboardSkeleton } from '@/components/Skeletons';
 import { cn } from '@/lib/utils';
 
 interface SuggestedMatch {
@@ -40,28 +42,62 @@ export default function DashboardPage() {
   const { data: meData } = useQuery<any>(GET_ME);
   const { data: sessionsData } = useQuery<any>(GET_MY_SESSIONS);
   const { data: requestsData } = useQuery<any>(GET_MY_MATCH_REQUESTS, { variables: { type: 'received' } });
-  const { data: suggestedData, loading: suggestedLoading } = useQuery<any>(GET_SUGGESTED_MATCHES);
+  const { data: suggestedData, refetch: refetchSuggested } = useQuery<any>(GET_SUGGESTED_MATCHES);
 
   const myOfferSkills = useMemo(
     () => (meData?.me?.skills ?? []).filter((s: any) => s.type === 'OFFER' && s.isActive !== false),
     [meData],
   );
-  const sessions = sessionsData?.mySessions ?? [];
+  const sessions = (sessionsData?.mySessions ?? []).filter((s: any) =>
+    ['NEGOTIATING', 'SCHEDULED', 'ACTIVE'].includes(s.status),
+  );
   const requests = (requestsData?.myMatchRequests?.items ?? []).filter((r: any) => r.status === 'PENDING');
   const suggested: SuggestedMatch[] = suggestedData?.suggestedMatches ?? [];
 
   const [swap, setSwap] = useState<SuggestedMatch | null>(null);
   const [offeredSkillId, setOfferedSkillId] = useState<string>('');
   const [message, setMessage] = useState('');
+  const [isGeneratingIcebreaker, setIsGeneratingIcebreaker] = useState(false);
+
+  const generateIcebreaker = async () => {
+    if (!swap) return;
+    const mySkill = myOfferSkills.find((s: any) => s.id === offeredSkillId);
+    if (!mySkill) {
+      toast.info('Select a skill you teach first, then generate.');
+      return;
+    }
+    setIsGeneratingIcebreaker(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001';
+      const res = await fetch(
+        `${baseUrl}/ai/icebreaker?wanted=${encodeURIComponent(swap.skill.title)}&offered=${encodeURIComponent(mySkill.title)}&partner=${encodeURIComponent(swap.skill.user.name)}`,
+      );
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setMessage(data.message);
+    } catch {
+      toast.error('Could not generate icebreaker. Try again.');
+    } finally {
+      setIsGeneratingIcebreaker(false);
+    }
+  };
+
   const [sendMatchRequest, { loading: sending }] = useMutation(SEND_MATCH_REQUEST, {
     onCompleted: () => {
       setSwap(null);
       setOfferedSkillId('');
       setMessage('');
-      alert('Swap request sent!');
+      toast.success('Swap request sent!');
+      refetchSuggested();
     },
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
   });
+
+  const isLoading = !sessionsData || !requestsData || !meData;
+
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
 
   const submitSwap = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,11 +159,7 @@ export default function DashboardPage() {
             title="AI-recommended matches"
             description="Ranked by semantic similarity to your 'Skills I want' list."
           >
-            {suggestedLoading ? (
-              <div className="surface border rounded-2xl p-12 flex items-center justify-center">
-                <Loader2 className="w-5 h-5 animate-spin text-muted" />
-              </div>
-            ) : suggested.length === 0 ? (
+            {suggested.length === 0 ? (
               <EmptyCard
                 title="No recommendations yet"
                 description="Add a 'Skill I want' on your profile so we can match you with experts."
@@ -147,7 +179,7 @@ export default function DashboardPage() {
             )}
           </Section>
 
-          <Section title="Active sessions">
+          <Section title="Ongoing sessions" action={{ href: '/matches', label: 'View all →' }}>
             {sessions.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sessions.map((session: any) => (
@@ -171,7 +203,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <EmptyCard
-                title="No active sessions"
+                title="No ongoing sessions"
                 description="Sessions appear here when both sides accept a swap."
               />
             )}
@@ -290,7 +322,22 @@ export default function DashboardPage() {
             </div>
 
             <label className="block space-y-2">
-              <span className="label-base">Personal note (optional)</span>
+              <div className="flex items-center justify-between">
+                <span className="label-base">Personal note (optional)</span>
+                <button
+                  type="button"
+                  onClick={generateIcebreaker}
+                  disabled={isGeneratingIcebreaker}
+                  className="text-[10px] font-semibold text-accent hover:underline disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isGeneratingIcebreaker ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" />
+                  )}
+                  Generate AI Icebreaker
+                </button>
+              </div>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -333,17 +380,26 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 function Section({
   title,
   description,
+  action,
   children,
 }: {
   title: string;
   description?: string;
+  action?: { href: string; label: string };
   children: React.ReactNode;
 }) {
   return (
     <section className="space-y-3">
-      <div>
-        <h2 className="text-lg font-semibold text-fg">{title}</h2>
-        {description && <p className="text-sm text-muted mt-0.5">{description}</p>}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-fg">{title}</h2>
+          {description && <p className="text-sm text-muted mt-0.5">{description}</p>}
+        </div>
+        {action && (
+          <Link href={action.href} className="text-xs font-semibold text-accent hover:underline shrink-0">
+            {action.label}
+          </Link>
+        )}
       </div>
       {children}
     </section>

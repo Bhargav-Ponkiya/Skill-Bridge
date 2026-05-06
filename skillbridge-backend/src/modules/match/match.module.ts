@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PubSub } from 'graphql-subscriptions';
@@ -11,11 +12,15 @@ import { MatchConsumer } from './match.consumer';
 import { DataloaderModule } from '../dataloader/dataloader.module';
 import { Skill } from '../skill/skill.entity';
 import { Session } from '../session/session.entity';
+import { User } from '../user/user.entity';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([MatchRequest, Skill, Session]),
+    ScheduleModule.forRoot(),
+    TypeOrmModule.forFeature([MatchRequest, Skill, Session, User]),
     DataloaderModule,
+    NotificationModule,
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

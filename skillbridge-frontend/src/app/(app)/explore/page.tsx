@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { SEARCH_SKILLS, GET_ME } from '@/graphql/queries';
 import { SEND_MATCH_REQUEST } from '@/graphql/mutations';
-import { Search, Loader2, Filter, Compass, Zap, ArrowRight } from 'lucide-react';
+import { Search, Loader2, Compass, Zap, ArrowRight } from 'lucide-react';
 import { SkillCard, type SkillCardSkill } from '@/components/SkillCard';
+import { SkillCardSkeleton } from '@/components/Skeletons';
 import { Modal } from '@/components/Modal';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -22,25 +23,26 @@ export default function ExplorePage() {
   const [swap, setSwap] = useState<SkillCardSkill | null>(null);
   const [offeredSkillId, setOfferedSkillId] = useState('');
   const [message, setMessage] = useState('');
-  const [page, setPage] = useState(1);
   const LIMIT = 12;
 
   const { data: meData } = useQuery<any>(GET_ME);
-  const { data, loading } = useQuery<any>(SEARCH_SKILLS, {
+  const { data, loading, fetchMore, refetch } = useQuery<any>(SEARCH_SKILLS, {
     variables: {
       query: query.trim() || null,
       category: category === 'All' ? null : category,
       type: type === 'ALL' ? null : type,
-      pagination: { page, limit: LIMIT },
+      pagination: { limit: LIMIT },
     },
+    notifyOnNetworkStatusChange: true,
   });
 
   const myOfferSkills = useMemo(
     () => (meData?.me?.skills ?? []).filter((s: any) => s.type === 'OFFER' && s.isActive !== false),
     [meData],
   );
-  const skills: SkillCardSkill[] = data?.searchSkills?.items ?? [];
-  const meta = data?.searchSkills?.meta;
+  const skills: SkillCardSkill[] = data?.searchSkills?.edges?.map((e: any) => e.node) ?? [];
+  const pageInfo = data?.searchSkills?.pageInfo;
+  const totalCount = data?.searchSkills?.totalCount;
 
   const [sendMatchRequest, { loading: sending }] = useMutation(SEND_MATCH_REQUEST, {
     onCompleted: () => {
@@ -69,6 +71,63 @@ export default function ExplorePage() {
     });
   };
 
+  // Infinite scroll: observe bottom sentinel.
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const isLoadingMore = useRef(false);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && pageInfo?.hasNextPage && !isLoadingMore.current && !loading) {
+          isLoadingMore.current = true;
+          fetchMore({
+            variables: { pagination: { cursor: pageInfo.endCursor, limit: LIMIT } },
+            updateQuery: (prev, { fetchMoreResult }) => {
+              if (!fetchMoreResult?.searchSkills?.edges?.length) return prev;
+              return {
+                searchSkills: {
+                  ...fetchMoreResult.searchSkills,
+                  edges: [...(prev.searchSkills?.edges ?? []), ...fetchMoreResult.searchSkills.edges],
+                },
+              };
+            },
+          }).finally(() => {
+            isLoadingMore.current = false;
+          });
+        }
+      },
+      { rootMargin: '400px' },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [pageInfo, loading, fetchMore]);
+
+  // Reset when filters change.
+  const resetFilters = () => {
+    refetch({
+      query: null,
+      category: null,
+      type: 'OFFER',
+      pagination: { limit: LIMIT },
+    });
+  };
+
+  const handleFilterChange = (updates: { query?: string; category?: string; type?: SkillTypeFilter }) => {
+    if (updates.query !== undefined) setQuery(updates.query);
+    if (updates.category !== undefined) setCategory(updates.category);
+    if (updates.type !== undefined) setType(updates.type);
+    refetch({
+      query: updates.query?.trim() || null,
+      category: updates.category === 'All' ? null : updates.category,
+      type: updates.type === 'ALL' ? null : updates.type,
+      pagination: { limit: LIMIT },
+    });
+  };
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       {/* Search & Hero */}
@@ -85,7 +144,7 @@ export default function ExplorePage() {
           <p className="text-base text-muted leading-relaxed max-w-xl">
             Join the world's most active skill-swapping community. Find mentors, teaching partners, and collaborators across thousands of skills.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <div className="relative flex-1 group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted group-focus-within:text-accent transition-colors" />
@@ -93,10 +152,7 @@ export default function ExplorePage() {
                 type="text"
                 placeholder="What do you want to learn today?"
                 value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setPage(1);
-                }}
+                onChange={(e) => handleFilterChange({ query: e.target.value })}
                 className="input-base !h-14 pl-12 !rounded-2xl !bg-surface/80 backdrop-blur-sm border-border shadow-sm focus:shadow-md transition-all text-base"
               />
             </div>
@@ -104,10 +160,7 @@ export default function ExplorePage() {
               {(['OFFER', 'WANT', 'ALL'] as const).map((t) => (
                 <button
                   key={t}
-                  onClick={() => {
-                    setType(t);
-                    setPage(1);
-                  }}
+                  onClick={() => handleFilterChange({ type: t })}
                   className={cn(
                     'px-6 py-2 rounded-xl text-sm font-bold transition-all',
                     type === t ? 'bg-surface text-accent shadow-sm border border-border' : 'text-muted hover:text-fg',
@@ -127,10 +180,7 @@ export default function ExplorePage() {
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
-              onClick={() => {
-                setCategory(cat);
-                setPage(1);
-              }}
+              onClick={() => handleFilterChange({ category: cat })}
               className={cn(
                 'whitespace-nowrap px-5 py-2 rounded-full text-sm font-semibold border transition-all',
                 category === cat
@@ -152,13 +202,13 @@ export default function ExplorePage() {
               {category === 'All' ? 'Latest Opportunities' : `Top in ${category}`}
             </h2>
           </div>
-          {meta && <span className="text-xs font-bold text-accent bg-accent/10 px-2 py-1 rounded-md">{meta.totalItems} results</span>}
+          {totalCount != null && <span className="text-xs font-bold text-accent bg-accent/10 px-2 py-1 rounded-md">{totalCount} results</span>}
         </div>
 
-        {loading ? (
+        {loading && skills.length === 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="surface border rounded-2xl p-5 h-48 animate-pulse bg-surface-2" />
+              <SkillCardSkeleton key={i} />
             ))}
           </div>
         ) : skills.length === 0 ? (
@@ -171,12 +221,7 @@ export default function ExplorePage() {
               We couldn't find exactly what you're looking for. Try broadening your keywords or exploring other categories.
             </p>
             <button
-              onClick={() => {
-                setQuery('');
-                setCategory('All');
-                setType('OFFER');
-                setPage(1);
-              }}
+              onClick={resetFilters}
               className="btn-primary !px-8"
             >
               Clear all filters
@@ -203,38 +248,15 @@ export default function ExplorePage() {
               ))}
             </div>
 
-            {meta && meta.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-4 pt-10">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="btn-secondary !py-2 !px-6 disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <div className="flex items-center gap-2">
-                   {[...Array(meta.totalPages)].map((_, i) => (
-                     <button
-                        key={i}
-                        onClick={() => setPage(i + 1)}
-                        className={cn(
-                          "w-8 h-8 rounded-lg text-xs font-bold transition-all",
-                          page === i + 1 ? "bg-accent text-white" : "hover:bg-surface-2 text-muted"
-                        )}
-                     >
-                       {i + 1}
-                     </button>
-                   ))}
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="flex justify-center py-8">
+              {pageInfo?.hasNextPage && (
+                <div className="flex items-center gap-2 text-sm text-muted">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading more...
                 </div>
-                <button
-                  disabled={page === meta.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="btn-secondary !py-2 !px-6 disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
       </div>

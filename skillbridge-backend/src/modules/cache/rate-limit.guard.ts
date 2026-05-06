@@ -1,9 +1,10 @@
-import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { CacheService } from './cache.service';
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {
+  private readonly logger = new Logger(RateLimitGuard.name);
   private readonly LIMIT = 100;
   private readonly WINDOW_SECONDS = 60;
 
@@ -14,15 +15,19 @@ export class RateLimitGuard implements CanActivate {
 
     let req;
     if (context.getType().toString() === 'graphql') {
-      req = GqlExecutionContext.create(context).getContext().req;
+      const gqlCtx = GqlExecutionContext.create(context).getContext();
+      req = gqlCtx.req || gqlCtx; // Some setups put req directly in context, some nest it
     } else {
       req = context.switchToHttp().getRequest();
     }
 
-    if (!req) return true; // Fail open if no request object
+    if (!req) {
+      this.logger.warn('RateLimitGuard: No request object found in context');
+      return true;
+    }
 
     // In Express, req.ip or req.connection.remoteAddress exists
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const ip = req.ip || req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
     
     // Extract userId if logged in, otherwise default to IP
     let identifier = ip;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
 import { GET_MESSAGES, GET_ME } from '@/graphql/queries';
 import { SEND_MESSAGE, SET_TYPING, MARK_SESSION_READ } from '@/graphql/mutations';
@@ -8,15 +8,16 @@ import {
   MESSAGE_ADDED_SUBSCRIPTION,
   TYPING_CHANGED_SUBSCRIPTION,
 } from '@/graphql/subscriptions';
-import { Send, Loader2, MessageSquare } from 'lucide-react';
+import { Loader2, MessageSquare, Check, CheckCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { ChatInput } from './ChatInput';
 
 interface ChatWindowProps {
   sessionId: string;
 }
 
 export function ChatWindow({ sessionId }: ChatWindowProps) {
-  const [input, setInput] = useState('');
   const [partnerTyping, setPartnerTyping] = useState<{ name?: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,11 +37,9 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     onData: ({ data }) => {
       const evt = (data.data as any)?.typingChanged;
       if (!evt) return;
-      // Ignore our own echo.
       if (evt.userId === meData?.me?.id) return;
       if (evt.isTyping) {
         setPartnerTyping({ name: evt.userName });
-        // Auto-clear if no follow-up event arrives within 4s (the typer disconnected).
         if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
         partnerTypingTimeoutRef.current = setTimeout(() => setPartnerTyping(null), 4000);
       } else {
@@ -50,23 +49,11 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     },
   });
 
-  const announceTyping = (typing: boolean) => {
+  const announceTyping = useCallback((typing: boolean) => {
     if (isTypingRef.current === typing) return;
     isTypingRef.current = typing;
     setTyping({ variables: { sessionId, isTyping: typing } }).catch(() => {});
-  };
-
-  const handleInputChange = (value: string) => {
-    setInput(value);
-    if (value.trim().length === 0) {
-      announceTyping(false);
-      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
-      return;
-    }
-    announceTyping(true);
-    if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
-    typingDebounceRef.current = setTimeout(() => announceTyping(false), 1500);
-  };
+  }, [sessionId, setTyping]);
 
   useEffect(() => {
     return () => {
@@ -80,13 +67,12 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
 
   const [sendMessage, { loading: sending }] = useMutation(SEND_MESSAGE, {
     onCompleted: () => {
-      setInput('');
       isTypingRef.current = false;
       if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
     },
     onError: (error) => {
       console.error('Failed to send message:', error);
-      alert('Failed to send message. Please try again.');
+      toast.error('Failed to send message. Please try again.');
     },
     update: (cache, { data }: any) => {
       const newMessage = data?.sendMessage;
@@ -95,7 +81,6 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
         variables: { sessionId },
       });
       if (existing && newMessage) {
-        // Only add if not already there (subscription might win)
         if (!existing.messages.find((m: any) => m.id === newMessage.id)) {
           cache.writeQuery({
             query: GET_MESSAGES,
@@ -117,7 +102,6 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
         if (!subscriptionData.data) return prev;
         const newMessage = subscriptionData.data.messageAdded;
 
-        // Prevent duplicates
         if (prev.messages.find((m: any) => m.id === newMessage.id)) {
           return prev;
         }
@@ -138,8 +122,6 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  // Whenever the chat is open and any message in the list isn't yet read by us, flip them
-  // to read on the server. Re-runs when new messages arrive over the subscription.
   useEffect(() => {
     if (!me?.id) return;
     const hasUnreadFromPartner = messages.some(
@@ -150,11 +132,10 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     }
   }, [messages, me?.id, sessionId, markSessionRead]);
 
-  const handleSend = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!input.trim() || sending) return;
-    sendMessage({ variables: { input: { sessionId, content: input.trim() } } });
-  };
+  const handleSend = useCallback((content: string) => {
+    if (sending) return;
+    sendMessage({ variables: { input: { sessionId, content } } });
+  }, [sessionId, sending, sendMessage]);
 
   return (
     <div className="surface border rounded-2xl flex flex-col h-[600px] overflow-hidden">
@@ -190,8 +171,15 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
                 >
                   {m.content}
                 </div>
-                <span className="text-[11px] text-muted mt-1 px-1">
+                <span className="text-[11px] text-muted mt-1 px-1 flex items-center gap-1">
                   {isMe ? 'You' : m.sender?.name} · {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {isMe && (
+                    m.isRead ? (
+                      <CheckCheck className="w-3 h-3 text-accent" />
+                    ) : (
+                      <Check className="w-3 h-3 text-muted-2" />
+                    )
+                  )}
                 </span>
               </div>
             );
@@ -216,24 +204,7 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
         </div>
       )}
 
-      <form onSubmit={handleSend} className="p-3 border-t border-border bg-surface flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => handleInputChange(e.target.value)}
-          disabled={sending}
-          placeholder="Type a message…"
-          className="input-base !rounded-lg"
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || sending}
-          className="btn-primary !px-3 !py-2 flex items-center justify-center disabled:opacity-50"
-          aria-label="Send"
-        >
-          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-        </button>
-      </form>
+      <ChatInput disabled={sending} onSendMessage={handleSend} />
     </div>
   );
 }

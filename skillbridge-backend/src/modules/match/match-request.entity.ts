@@ -1,4 +1,5 @@
 import { ObjectType, Field, ID, registerEnumType } from '@nestjs/graphql';
+import { GraphQLJSONObject } from 'graphql-type-json';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,16 +7,19 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   Index,
 } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Skill } from '../skill/skill.entity';
+import { Message } from '../message/message.entity';
 
 export enum MatchRequestStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
   DECLINED = 'DECLINED',
+  CANCELLED = 'CANCELLED',
 }
 registerEnumType(MatchRequestStatus, { name: 'MatchRequestStatus' });
 
@@ -64,6 +68,14 @@ export class MatchRequest {
   @JoinColumn({ name: 'wantedSkillId' })
   wantedSkill?: Skill;
 
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  offeredSkillSnapshot?: { title: string; description: string; level: string };
+
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  wantedSkillSnapshot?: { title: string; description: string; level: string };
+
   @Field(() => MatchRequestStatus)
   @Column({ type: 'enum', enum: MatchRequestStatus, default: MatchRequestStatus.PENDING })
   status: MatchRequestStatus;
@@ -79,4 +91,8 @@ export class MatchRequest {
   @Field()
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Field(() => [Message], { nullable: true })
+  @OneToMany(() => Message, (message) => message.matchRequest)
+  messages?: Message[];
 }

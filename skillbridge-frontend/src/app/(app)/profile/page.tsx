@@ -36,6 +36,7 @@ import { AvailabilityEditor } from '@/components/AvailabilityEditor';
 import { Clock, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReputationSummary } from '@/components/ReputationSummary';
+import { toast } from 'sonner';
 
 type Tab = 'offered' | 'wanted';
 type Section = 'overview' | 'skills';
@@ -56,7 +57,7 @@ export default function MyProfilePage() {
       setSkillModal(null);
       refetch();
     },
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   const [updateSkill, { loading: updating }] = useMutation(UPDATE_SKILL, {
@@ -64,7 +65,7 @@ export default function MyProfilePage() {
       setSkillModal(null);
       refetch();
     },
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   const [deleteSkill, { loading: deleting }] = useMutation(DELETE_SKILL, {
@@ -72,11 +73,11 @@ export default function MyProfilePage() {
       setConfirmDelete(null);
       refetch();
     },
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   const [toggleSkill] = useMutation(TOGGLE_SKILL_ACTIVE, {
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
     onCompleted: () => refetch(),
   });
 
@@ -85,7 +86,7 @@ export default function MyProfilePage() {
       setProfileModalOpen(false);
       refetch();
     },
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   const user = data?.me ?? storeUser;

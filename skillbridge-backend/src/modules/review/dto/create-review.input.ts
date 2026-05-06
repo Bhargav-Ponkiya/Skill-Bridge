@@ -1,5 +1,5 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
-import { IsNotEmpty, IsString, IsUUID, Min, Max, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, Min, Max, IsOptional, IsBoolean } from 'class-validator';
 
 @InputType()
 export class CreateReviewInput {
@@ -23,4 +23,9 @@ export class CreateReviewInput {
   @IsString()
   @IsOptional()
   comment?: string;
+
+  @Field({ nullable: true, defaultValue: false })
+  @IsBoolean()
+  @IsOptional()
+  endorsedSkill?: boolean;
 }

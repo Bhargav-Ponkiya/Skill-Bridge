@@ -29,6 +29,8 @@ export function SummaryPanel({
   const [isGenerating, setIsGenerating] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
 
   const { data: reviewsData, refetch: refetchReviews } = useQuery<any>(GET_USER_REVIEWS, {
     variables: { userId: partnerId ?? '' },
@@ -44,26 +46,79 @@ export function SummaryPanel({
       refetchReviews();
       onReviewed?.();
     },
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   const handleGenerate = () => {
     setIsGenerating(true);
     setSummary('');
-    const backendUrl = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001';
-    const eventSource = new EventSource(`${backendUrl}/ai/session/${sessionId}/summary/stream`);
-    eventSource.onmessage = (event) => setSummary((prev) => prev + event.data);
-    eventSource.onerror = (err) => {
-      console.warn('SSE stream status check:', eventSource.readyState);
-      eventSource.close();
+    setRetryCount(0);
+
+    const url = `${process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001'}/ai/session/${sessionId}/summary/stream`;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      eventSource = new EventSource(url);
+    } catch (err) {
+      toast.error('Unable to connect to the AI summary service.');
       setIsGenerating(false);
+      return;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (event.data === '[DONE]') {
+        eventSource?.close();
+        setIsGenerating(false);
+        return;
+      }
+      setSummary((prev) => prev + event.data);
+    };
+
+    eventSource.onerror = () => {
+      if (!eventSource) return;
+
+      const readyState = eventSource.readyState;
+
+      if (readyState === 0) return;
+
+      if (readyState === 2) {
+        eventSource.close();
+        eventSource = null;
+        setIsGenerating(false);
+
+        if (retryCount < MAX_RETRIES) {
+          setRetryCount((prev) => prev + 1);
+          toast.info(`Reconnecting... (${retryCount + 1}/${MAX_RETRIES})`);
+          setTimeout(() => {
+            if (!isGenerating) return;
+            try {
+              eventSource = new EventSource(url);
+            } catch {
+              toast.error('Connection to AI summary service failed.');
+              setIsGenerating(false);
+            }
+          }, 2000);
+        } else {
+          toast.error('AI summary service is unavailable. Please try again later.');
+        }
+        return;
+      }
+
+      eventSource.close();
+      eventSource = null;
+      setIsGenerating(false);
+
       if (summary.length < 10) {
-        toast.error('AI summary is taking too long or failed. Please try again.');
+        toast.error('Session expired or unauthorized. Please log in again.');
       }
     };
+
     eventSource.addEventListener('close', () => {
-      eventSource.close();
+      eventSource?.close();
+      eventSource = null;
       setIsGenerating(false);
+      setRetryCount(0);
     });
   };
 

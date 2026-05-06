@@ -1,4 +1,5 @@
 import { ObjectType, Field, ID, registerEnumType } from '@nestjs/graphql';
+import { GraphQLJSONObject } from 'graphql-type-json';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -8,6 +9,7 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  VersionColumn,
 } from 'typeorm';
 import { MatchRequest } from '../match/match-request.entity';
 import { User } from '../user/user.entity';
@@ -19,6 +21,7 @@ export enum SessionStatus {
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   REVIEWED = 'REVIEWED',
+  CANCELLED = 'CANCELLED',
 }
 registerEnumType(SessionStatus, { name: 'SessionStatus' });
 
@@ -115,7 +118,7 @@ export class Session {
   @Column({ default: false })
   p2Completed: boolean;
 
-  @Field(() => String, { nullable: true, description: 'JSON structure for session milestones' })
+  @Field(() => GraphQLJSONObject, { nullable: true, description: 'JSON structure for session milestones' })
   @Column({ type: 'jsonb', nullable: true })
   checkpoints?: any;
 
@@ -123,7 +126,7 @@ export class Session {
   @Column({ type: 'text', nullable: true })
   roadmap?: string;
 
-  @Field(() => String, { nullable: true, description: 'JSON structure for AI-suggested learning resources' })
+  @Field(() => GraphQLJSONObject, { nullable: true, description: 'JSON structure for AI-suggested learning resources' })
   @Column({ type: 'jsonb', nullable: true })
   suggestedResources?: any;
 
@@ -134,4 +137,8 @@ export class Session {
   @Field()
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Field()
+  @VersionColumn()
+  version: number;
 }

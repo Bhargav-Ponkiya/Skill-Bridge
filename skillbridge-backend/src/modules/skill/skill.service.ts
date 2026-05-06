@@ -1,12 +1,12 @@
-import { Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository, FindOptionsWhere, Not, ILike, In } from 'typeorm';
+import { IsNull, Repository, FindOptionsWhere, Not, ILike, In, LessThan } from 'typeorm';
 import { Skill, SkillType } from './skill.entity';
 import { Portfolio } from './portfolio.entity';
 import { CreateSkillInput } from './dto/create-skill.input';
 import { UpdateSkillInput } from './dto/update-skill.input';
-import { PaginationInput } from '../../common/dto/pagination.dto';
-import { PaginatedSkills } from './dto/paginated-skills.output';
+import { CursorPaginationInput } from '../../common/dto/cursor-pagination.input';
+import { PaginatedSkills, SkillEdge } from './dto/paginated-skills.output';
 import { AiService } from '../ai/ai.service';
 
 @Injectable()
@@ -104,6 +104,26 @@ export class SkillService implements OnApplicationBootstrap {
     const skill = await this.skillRepository.findOne({ where: { id, userId } });
     if (!skill) throw new NotFoundException('Skill not found or you do not have permission.');
 
+    // Prevent deletion if the skill is in any active exchange
+    const activeRequestCount = await this.skillRepository.manager.query(
+      `SELECT COUNT(*)::int AS count FROM match_requests
+       WHERE ("offeredSkillId" = $1 OR "wantedSkillId" = $1)
+         AND status = 'PENDING'`,
+      [id],
+    );
+    const activeSessionCount = await this.skillRepository.manager.query(
+      `SELECT COUNT(*)::int AS count FROM sessions
+       WHERE ("skill1Id" = $1 OR "skill2Id" = $1)
+         AND status IN ('NEGOTIATING', 'SCHEDULED', 'ACTIVE')`,
+      [id],
+    );
+
+    if ((activeRequestCount[0]?.count > 0) || (activeSessionCount[0]?.count > 0)) {
+      throw new BadRequestException(
+        'Cannot delete a skill that is part of an active exchange. Deactivate it instead.',
+      );
+    }
+
     await this.skillRepository.remove(skill);
     return true;
   }
@@ -127,7 +147,7 @@ export class SkillService implements OnApplicationBootstrap {
     query?: string,
     category?: string,
     type?: string,
-    pagination: PaginationInput = { page: 1, limit: 20 },
+    pagination: CursorPaginationInput = { limit: 20 },
   ): Promise<PaginatedSkills> {
     const qb = this.skillRepository
       .createQueryBuilder('skill')
@@ -152,21 +172,53 @@ export class SkillService implements OnApplicationBootstrap {
       qb.andWhere('skill.type = :defaultType', { defaultType: SkillType.OFFER });
     }
 
-    const [items, totalItems] = await qb
-      .orderBy('skill.createdAt', 'DESC')
-      .skip((pagination.page - 1) * pagination.limit)
-      .take(pagination.limit)
-      .getManyAndCount();
+    // Cursor-based: fetch one extra to determine if there's a next page.
+    const limit = pagination.limit + 1;
+
+    if (pagination.cursor) {
+      const cursorDate = new Date(Buffer.from(pagination.cursor, 'base64').toString('utf-8'));
+      qb.andWhere('skill."createdAt" < :cursor', { cursor: cursorDate });
+    }
+
+    const items = await qb
+      .orderBy('skill."createdAt"', 'DESC')
+      .take(limit)
+      .getMany();
+
+    const hasNextPage = items.length > pagination.limit;
+    const pageItems = hasNextPage ? items.slice(0, -1) : items;
+
+    // Get total count for display purposes (not required for cursor pagination but useful).
+    const countQb = this.skillRepository
+      .createQueryBuilder('skill')
+      .where('skill.isActive = :active', { active: true })
+      .andWhere('skill.userId != :uid', { uid: currentUserId });
+
+    if (query && query.trim()) {
+      countQb.andWhere('(LOWER(skill.title) LIKE :q OR LOWER(skill.description) LIKE :q)', { q: `%${query.toLowerCase()}%` });
+    }
+    if (category && category !== 'All') {
+      countQb.andWhere('skill.category = :category', { category });
+    }
+    if (type && (type === SkillType.OFFER || type === SkillType.WANT)) {
+      countQb.andWhere('skill.type = :type', { type });
+    } else {
+      countQb.andWhere('skill.type = :defaultType', { defaultType: SkillType.OFFER });
+    }
+
+    const totalCount = await countQb.getCount();
+
+    const edges: SkillEdge[] = pageItems.map((item) => ({
+      node: item,
+      cursor: Buffer.from(item.createdAt.toISOString()).toString('base64'),
+    }));
+
+    const endCursor = edges.length > 0 ? edges[edges.length - 1].cursor : undefined;
 
     return {
-      items,
-      meta: {
-        totalItems,
-        itemCount: items.length,
-        itemsPerPage: pagination.limit,
-        totalPages: Math.ceil(totalItems / pagination.limit),
-        currentPage: pagination.page,
-      },
+      edges,
+      pageInfo: { hasNextPage, endCursor },
+      totalCount,
     };
   }
 

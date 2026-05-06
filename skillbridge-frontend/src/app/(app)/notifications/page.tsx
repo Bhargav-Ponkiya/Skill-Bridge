@@ -4,8 +4,6 @@ import Link from 'next/link';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   GET_MY_NOTIFICATIONS,
-  GET_MY_MATCH_REQUESTS,
-  GET_MY_SESSIONS,
 } from '@/graphql/queries';
 import { MARK_NOTIFICATION_READ } from '@/graphql/mutations';
 import {
@@ -34,10 +32,6 @@ export default function NotificationsPage() {
     GET_MY_NOTIFICATIONS,
     { fetchPolicy: 'cache-and-network' },
   );
-  const { data: requestsData } = useQuery<any>(GET_MY_MATCH_REQUESTS, {
-    variables: { type: 'received' },
-  });
-  const { data: sessionsData } = useQuery<any>(GET_MY_SESSIONS);
 
   const [markRead] = useMutation(MARK_NOTIFICATION_READ, {
     onCompleted: () => refetchNotifications(),
@@ -58,40 +52,7 @@ export default function NotificationsPage() {
     });
   }
 
-  // Synthesize derived items (pending requests / scheduled sessions) so the feed isn't empty
-  // before any explicit notifications have been emitted.
-  for (const r of requestsData?.myMatchRequests?.items ?? []) {
-    if (r.status !== 'PENDING') continue;
-    items.push({
-      id: `req-${r.id}`,
-      icon: Inbox,
-      title: `${r.fromUser?.name} proposes "${r.offeredSkill?.title}" ↔ "${r.wantedSkill?.title}"`,
-      meta: 'Awaiting your response',
-      href: '/matches',
-      createdAt: r.createdAt,
-      isRead: false,
-    });
-  }
-  for (const s of sessionsData?.mySessions ?? []) {
-    items.push({
-      id: `sess-${s.id}`,
-      icon: MessageCircle,
-      title: `Session ${s.status.toLowerCase()}: ${s.skill1?.title} ↔ ${s.skill2?.title}`,
-      meta:
-        s.status === 'COMPLETED'
-          ? 'Wrap up by leaving a review'
-          : s.scheduledAt
-            ? `Scheduled for ${new Date(s.scheduledAt).toLocaleString()}`
-            : 'Negotiating logistics',
-      href: `/session/${s.id}`,
-      createdAt: s.scheduledAt || s.createdAt || new Date().toISOString(),
-      isRead: s.status !== 'COMPLETED',
-    });
-  }
-
-  // Dedupe by id and sort newest first
-  const dedupedById = new Map(items.map((it) => [it.id, it]));
-  const sorted = Array.from(dedupedById.values()).sort(
+  const sorted = items.sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 

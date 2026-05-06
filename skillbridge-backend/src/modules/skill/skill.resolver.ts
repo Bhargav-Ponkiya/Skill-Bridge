@@ -11,7 +11,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { PaginatedSkills } from './dto/paginated-skills.output';
-import { PaginationInput } from '../../common/dto/pagination.dto';
+import { CursorPaginationInput } from '../../common/dto/cursor-pagination.input';
 import { AddPortfolioInput } from './dto/add-portfolio.input';
 import { UpdatePortfolioInput } from './dto/update-portfolio.input';
 
@@ -32,7 +32,7 @@ export class SkillResolver {
     @Args('query', { nullable: true }) query?: string,
     @Args('category', { nullable: true }) category?: string,
     @Args('type', { nullable: true }) type?: string,
-    @Args('pagination', { nullable: true }) pagination?: PaginationInput,
+    @Args('pagination', { nullable: true }) pagination?: CursorPaginationInput,
   ): Promise<PaginatedSkills> {
     return this.skillService.searchSkills(user.id || user.sub, query, category, type, pagination);
   }
