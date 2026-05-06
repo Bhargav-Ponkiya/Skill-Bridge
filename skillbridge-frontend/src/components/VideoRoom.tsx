@@ -10,7 +10,7 @@ interface VideoRoomProps {
 export function VideoRoom({ sessionId }: VideoRoomProps) {
   const [loading, setLoading] = useState(true);
   const roomName = `skillbridge-${sessionId}`;
-  const jitsiUrl = `https://meet.jit.si/${roomName}`;
+  const jitsiUrl = `https://meet.jit.si/${roomName}#config.disableThirdPartyRequests=true&config.disableDeepLinking=true&interfaceConfig.SHOW_PROMOTIONAL_CLOSE_PAGE=false`;
 
   return (
     <div className="surface border rounded-2xl overflow-hidden">
