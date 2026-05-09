@@ -44,9 +44,7 @@ export class AuthResolver {
 
   @Public()
   @Mutation(() => AuthResponse)
-  async guestLogin(
-    @Context('res') res: Response,
-  ): Promise<AuthResponse> {
+  async guestLogin(@Context('res') res: Response): Promise<AuthResponse> {
     const { accessToken, user } = await this.authService.guestLogin();
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
@@ -55,6 +53,22 @@ export class AuthResolver {
       maxAge: 15 * 60 * 1000,
     });
     return { accessToken, user };
+  }
+
+  @Public()
+  @Mutation(() => AuthResponse)
+  async refreshToken(
+    @Args('token') token: string,
+    @Context('res') res: Response,
+  ): Promise<AuthResponse> {
+    const result = await this.authService.refreshToken(token);
+    res.cookie('accessToken', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000,
+    });
+    return result;
   }
 
   @Public()

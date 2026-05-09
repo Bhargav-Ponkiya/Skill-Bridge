@@ -8,7 +8,11 @@ import { DataloaderModule } from '../dataloader/dataloader.module';
 import { AiModule } from '../ai/ai.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Skill, Portfolio]), DataloaderModule, AiModule],
+  imports: [
+    TypeOrmModule.forFeature([Skill, Portfolio]),
+    DataloaderModule,
+    AiModule,
+  ],
   providers: [SkillService, SkillResolver],
   exports: [SkillService],
 })

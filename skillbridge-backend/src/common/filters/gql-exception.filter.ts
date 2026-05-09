@@ -20,12 +20,15 @@ export class GqlExceptionFilter implements NestGqlExceptionFilter {
           ? response.message[0]
           : (response.message ?? exception.message);
       }
-      
+
       this.logger.error(`Unhandled exception: ${message}`, exception.stack);
-      
+
       return new GraphQLError(message, {
         extensions: {
-          code: (exception as any).status === 400 ? 'BAD_USER_INPUT' : 'INTERNAL_SERVER_ERROR',
+          code:
+            (exception as any).status === 400
+              ? 'BAD_USER_INPUT'
+              : 'INTERNAL_SERVER_ERROR',
           response,
           timestamp: new Date().toISOString(),
         },

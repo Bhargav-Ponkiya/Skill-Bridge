@@ -16,7 +16,8 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
   const port = config.get<number>('app.port') ?? 3001;
-  const frontendUrl = config.get<string>('app.frontendUrl') ?? '*';
+  const frontendUrl =
+    config.get<string>('app.frontendUrl') ?? 'http://localhost:3000';
   const redisUrl = config.get<string>('redis.url') ?? 'redis://localhost:6379';
 
   const redisIoAdapter = new RedisIoAdapter(app);

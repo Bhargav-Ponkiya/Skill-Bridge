@@ -47,6 +47,7 @@ export const GET_MY_SKILLS = gql`
       type
       proficiencyLevel
       isActive
+      swappedCount
       createdAt
       portfolios {
         id
@@ -68,6 +69,8 @@ export const GET_USER_BY_USERNAME = gql`
       bio
       timezone
       isVerified
+      trustScore
+      reviewCount
       createdAt
       skills {
         id
@@ -76,6 +79,7 @@ export const GET_USER_BY_USERNAME = gql`
         category
         type
         proficiencyLevel
+        swappedCount
         portfolios {
           id
           title
@@ -102,6 +106,7 @@ export const GET_USER_STATS = gql`
         reviewSignal
         sessionSignal
         portfolioSignal
+        endorsementSignal
       }
     }
   }
@@ -252,6 +257,7 @@ export const SEARCH_SKILLS = gql`
           category
           type
           proficiencyLevel
+          swappedCount
           user {
             id
             name
@@ -369,6 +375,20 @@ export const GET_USER_REVIEWS = gql`
   query GetUserReviews($userId: String!) {
     userReviews(userId: $userId) {
       id
+      sessionId
+      rating
+      comment
+      createdAt
+      reviewer { id name avatar }
+    }
+  }
+`;
+
+export const SKILL_REVIEWS = gql`
+  query SkillReviews($userId: String!, $skillId: String!) {
+    skillReviews(userId: $userId, skillId: $skillId) {
+      id
+      sessionId
       rating
       comment
       createdAt

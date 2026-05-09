@@ -27,13 +27,17 @@ export class SessionConsumer {
     queue: 'session-creation-queue',
   })
   public async handleMatchAccepted(msg: { matchRequestId: string }) {
-    this.logger.log(`Handling match.accepted event for match request ID: ${msg.matchRequestId}`);
+    this.logger.log(
+      `Handling match.accepted event for match request ID: ${msg.matchRequestId}`,
+    );
 
     const existing = await this.sessionRepository.findOne({
       where: { matchRequestId: msg.matchRequestId },
     });
     if (existing) {
-      this.logger.log(`Session already exists for matchRequestId=${msg.matchRequestId}; skipping.`);
+      this.logger.log(
+        `Session already exists for matchRequestId=${msg.matchRequestId}; skipping.`,
+      );
       return;
     }
 
@@ -55,9 +59,13 @@ export class SessionConsumer {
         status: SessionStatus.NEGOTIATING,
       });
       await this.sessionRepository.save(session);
-      this.logger.log(`Created session via consumer fallback for matchRequestId=${msg.matchRequestId}`);
+      this.logger.log(
+        `Created session via consumer fallback for matchRequestId=${msg.matchRequestId}`,
+      );
     } catch (e) {
-      this.logger.error(`Failed to create session in consumer fallback: ${(e as Error).message}`);
+      this.logger.error(
+        `Failed to create session in consumer fallback: ${(e as Error).message}`,
+      );
     }
   }
 }

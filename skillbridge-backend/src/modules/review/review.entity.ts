@@ -10,6 +10,7 @@ import {
   Index,
 } from 'typeorm';
 import { Session } from '../session/session.entity';
+import { Skill } from '../skill/skill.entity';
 import { User } from '../user/user.entity';
 
 @ObjectType()
@@ -28,6 +29,16 @@ export class Review {
   @ManyToOne(() => Session, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'sessionId' })
   session?: Session;
+
+  @Field({ nullable: true })
+  @Column({ nullable: true })
+  @Index()
+  skillId?: string;
+
+  @Field(() => Skill, { nullable: true })
+  @ManyToOne(() => Skill, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'skillId' })
+  skill?: Skill;
 
   @Field()
   @Column()

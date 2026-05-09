@@ -8,8 +8,12 @@ export class CacheService {
   private readonly logger = new Logger(CacheService.name);
 
   constructor(private readonly configService: ConfigService) {
-    const redisUrl = this.configService.get<string>('redis.url') || 'redis://localhost:6379';
+    const redisUrl =
+      this.configService.get<string>('redis.url') || 'redis://localhost:6379';
     this.redisClient = new Redis(redisUrl);
+    this.redisClient.on('error', (err) => {
+      this.logger.error(`Redis connection error: ${err.message}`);
+    });
   }
 
   async get<T>(key: string): Promise<T | null> {

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useMutation } from '@apollo/client/react';
 import { UPDATE_SESSION } from '@/graphql/mutations';
 import { toast } from 'sonner';
-import { Calendar, Clock, Video, MessageSquare as Chat, MapPin, ExternalLink, Download, Loader2 } from 'lucide-react';
+import { Calendar, Video, MessageSquare as Chat, MapPin, ExternalLink, Download, Loader2 } from 'lucide-react';
 import { overlappingSlots, formatSlot } from '@/components/AvailabilityEditor';
 
 function toLocalInput(iso: string): string {

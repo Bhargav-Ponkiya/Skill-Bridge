@@ -11,7 +11,9 @@ export class MatchConsumer {
     queue: 'match-processing-queue',
   })
   public async handleMatchRequested(msg: any) {
-    this.logger.log(`Received match.requested event for MatchRequest ID: ${msg.matchRequestId}`);
+    this.logger.log(
+      `Received match.requested event for MatchRequest ID: ${msg.matchRequestId}`,
+    );
     // Future: enqueue email + push notifications for the recipient.
   }
 

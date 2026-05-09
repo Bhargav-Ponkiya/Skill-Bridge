@@ -15,23 +15,45 @@ export class ReviewService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async createReview(reviewerId: string, input: CreateReviewInput): Promise<Review> {
-    const session = await this.sessionRepository.findOne({ where: { id: input.sessionId } });
+  async createReview(
+    reviewerId: string,
+    input: CreateReviewInput,
+  ): Promise<Review> {
+    const session = await this.sessionRepository.findOne({
+      where: { id: input.sessionId },
+    });
 
     if (!session) {
       throw new BadRequestException('Session not found');
     }
 
-    if (session.status !== SessionStatus.COMPLETED && session.status !== SessionStatus.REVIEWED) {
+    if (
+      session.status !== SessionStatus.COMPLETED &&
+      session.status !== SessionStatus.REVIEWED
+    ) {
       throw new BadRequestException('Can only review completed sessions');
     }
 
-    if (session.participant1Id !== reviewerId && session.participant2Id !== reviewerId) {
-      throw new BadRequestException('You are not a participant in this session');
+    if (
+      session.participant1Id !== reviewerId &&
+      session.participant2Id !== reviewerId
+    ) {
+      throw new BadRequestException(
+        'You are not a participant in this session',
+      );
     }
 
     if (reviewerId === input.revieweeId) {
       throw new BadRequestException('You cannot review yourself');
+    }
+
+    if (
+      input.revieweeId !== session.participant1Id &&
+      input.revieweeId !== session.participant2Id
+    ) {
+      throw new BadRequestException(
+        'Reviewee must be the other session participant.',
+      );
     }
 
     const existingReview = await this.reviewRepository.findOne({
@@ -41,20 +63,27 @@ export class ReviewService {
       throw new BadRequestException('You have already reviewed this session');
     }
 
+    const skillId =
+      session.participant1Id === input.revieweeId
+        ? session.skill1Id
+        : session.skill2Id;
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const review = this.reviewRepository.create({ ...input, reviewerId });
+      const review = this.reviewRepository.create({
+        ...input,
+        reviewerId,
+        skillId,
+      });
       const savedReview = await queryRunner.manager.save(review);
 
       if (input.endorsedSkill) {
-        const endorsedSkillId =
-          session.participant1Id === input.revieweeId ? session.skill1Id : session.skill2Id;
         await queryRunner.manager.query(
           'UPDATE skills SET "endorsementsCount" = "endorsementsCount" + 1 WHERE id = $1',
-          [endorsedSkillId],
+          [skillId],
         );
       }
 
@@ -80,6 +109,17 @@ export class ReviewService {
   async getReviewsForUser(userId: string): Promise<Review[]> {
     return this.reviewRepository.find({
       where: { revieweeId: userId },
+      order: { createdAt: 'DESC' },
+      relations: ['reviewer'],
+    });
+  }
+
+  async getReviewsForUserAndSkill(
+    userId: string,
+    skillId: string,
+  ): Promise<Review[]> {
+    return this.reviewRepository.find({
+      where: { revieweeId: userId, skillId },
       order: { createdAt: 'DESC' },
       relations: ['reviewer'],
     });

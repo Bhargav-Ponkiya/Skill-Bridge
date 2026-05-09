@@ -1,4 +1,14 @@
-import { Controller, Sse, Param, Query, Body, Post, Get } from '@nestjs/common';
+import {
+  Controller,
+  Sse,
+  Param,
+  Query,
+  Body,
+  Post,
+  Get,
+  UnauthorizedException,
+  Req,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Observable } from 'rxjs';
@@ -23,12 +33,33 @@ export class AiController {
     private readonly sessionRepository: Repository<Session>,
   ) {}
 
-  @Public()
   @Sse('session/:id/summary/stream')
-  streamSummary(@Param('id') sessionId: string): Observable<MessageEvent> {
+  streamSummary(
+    @Param('id') sessionId: string,
+    @Req() req: any,
+  ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
       (async () => {
         try {
+          const userId = req.user?.id || req.user?.sub;
+          if (userId) {
+            const session = await this.sessionRepository.findOne({
+              where: { id: sessionId },
+              select: ['id', 'participant1Id', 'participant2Id'],
+            });
+            if (
+              session &&
+              session.participant1Id !== userId &&
+              session.participant2Id !== userId
+            ) {
+              subscriber.error(
+                new UnauthorizedException(
+                  'You are not a participant of this session',
+                ),
+              );
+              return;
+            }
+          }
           const messages = await this.messageRepository.find({
             where: { sessionId },
             order: { createdAt: 'ASC' },
@@ -36,7 +67,9 @@ export class AiController {
           });
 
           const transcript = this.buildTranscript(messages);
-          const wordCount = transcript ? transcript.split(/\s+/).filter(Boolean).length : 0;
+          const wordCount = transcript
+            ? transcript.split(/\s+/).filter(Boolean).length
+            : 0;
 
           // Refuse to summarise gibberish — protects users from hallucinated recaps and saves quota.
           if (messages.length < MIN_MESSAGES || wordCount < MIN_TOTAL_WORDS) {
@@ -62,7 +95,6 @@ export class AiController {
     });
   }
 
-  @Public()
   @Sse('agenda')
   streamAgenda(
     @Query('offered') offeredTitle: string,
@@ -92,8 +124,61 @@ export class AiController {
   }
 
   @Public()
+  @Sse('user/:userId/skill/:skillId/reviews/summary/stream')
+  streamSkillReviewsSummary(
+    @Param('userId') userId: string,
+    @Param('skillId') skillId: string,
+    @Query('title') skillTitle: string,
+  ): Observable<MessageEvent> {
+    return new Observable<MessageEvent>((subscriber) => {
+      (async () => {
+        try {
+          const reviews = await this.reviewRepository.find({
+            where: { revieweeId: userId, skillId },
+            order: { createdAt: 'DESC' },
+            take: 30,
+            relations: ['reviewer'],
+          });
+
+          if (reviews.length === 0) {
+            subscriber.next({
+              data: `No reviews yet for ${skillTitle || 'this skill'} — once partners leave reviews, a digest appears here.`,
+            } as MessageEvent);
+            return;
+          }
+
+          const reviewsText = reviews
+            .map((r) => {
+              const stars =
+                '★'.repeat(r.rating) + '☆'.repeat(Math.max(0, 5 - r.rating));
+              const comment = r.comment?.trim() || '(no written comment)';
+              return `[${stars}] ${comment}`;
+            })
+            .join('\n');
+
+          const generator = this.aiService.streamSkillReviewsSummary(
+            reviewsText,
+            reviews.length,
+            skillTitle || 'this skill',
+          );
+          for await (const chunk of generator) {
+            subscriber.next({ data: chunk } as MessageEvent);
+          }
+        } catch (e) {
+          subscriber.error(e);
+        } finally {
+          subscriber.next({ data: '[DONE]' } as MessageEvent);
+          subscriber.complete();
+        }
+      })();
+    });
+  }
+
+  @Public()
   @Sse('user/:id/reviews/summary/stream')
-  streamUserReviewsSummary(@Param('id') userId: string): Observable<MessageEvent> {
+  streamUserReviewsSummary(
+    @Param('id') userId: string,
+  ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
       (async () => {
         try {
@@ -104,19 +189,25 @@ export class AiController {
           });
 
           if (reviews.length === 0) {
-            subscriber.next({ data: 'No reviews yet — once partners leave reviews, an AI digest appears here.' } as MessageEvent);
+            subscriber.next({
+              data: 'No reviews yet — once partners leave reviews, an AI digest appears here.',
+            } as MessageEvent);
             return;
           }
 
           const reviewsText = reviews
             .map((r) => {
-              const stars = '★'.repeat(r.rating) + '☆'.repeat(Math.max(0, 5 - r.rating));
+              const stars =
+                '★'.repeat(r.rating) + '☆'.repeat(Math.max(0, 5 - r.rating));
               const comment = r.comment?.trim() || '(no written comment)';
               return `[${stars}] ${comment}`;
             })
             .join('\n');
 
-          const generator = this.aiService.streamUserReviewsSummary(reviewsText, reviews.length);
+          const generator = this.aiService.streamUserReviewsSummary(
+            reviewsText,
+            reviews.length,
+          );
           for await (const chunk of generator) {
             subscriber.next({ data: chunk } as MessageEvent);
           }
@@ -139,14 +230,39 @@ export class AiController {
       .join('\n');
   }
 
-  @Public()
   @Sse('session/:id/takeaways/stream')
-  streamTakeaways(@Param('id') sessionId: string, @Query('notes') notes: string): Observable<MessageEvent> {
+  streamTakeaways(
+    @Param('id') sessionId: string,
+    @Query('notes') notes: string,
+    @Req() req: any,
+  ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
       (async () => {
         try {
+          const userId = req.user?.id || req.user?.sub;
+          if (userId) {
+            const sessionCheck = await this.sessionRepository.findOne({
+              where: { id: sessionId },
+              select: ['id', 'participant1Id', 'participant2Id'],
+            });
+            if (
+              sessionCheck &&
+              sessionCheck.participant1Id !== userId &&
+              sessionCheck.participant2Id !== userId
+            ) {
+              subscriber.error(
+                new UnauthorizedException(
+                  'You are not a participant of this session',
+                ),
+              );
+              return;
+            }
+          }
+
           if (!notes || notes.trim().length < 5) {
-            subscriber.next({ data: 'Please add a few more notes so the AI can generate meaningful takeaways.' } as MessageEvent);
+            subscriber.next({
+              data: 'Please add a few more notes so the AI can generate meaningful takeaways.',
+            } as MessageEvent);
             return;
           }
 
@@ -179,7 +295,6 @@ export class AiController {
     });
   }
 
-  @Public()
   @Get('icebreaker')
   async getIcebreaker(
     @Query('wanted') wantedSkill: string,

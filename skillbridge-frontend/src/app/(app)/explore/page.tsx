@@ -26,7 +26,7 @@ export default function ExplorePage() {
   const LIMIT = 12;
 
   const { data: meData } = useQuery<any>(GET_ME);
-  const { data, loading, fetchMore, refetch } = useQuery<any>(SEARCH_SKILLS, {
+  const { data, loading, error: searchError, fetchMore, refetch } = useQuery<any>(SEARCH_SKILLS, {
     variables: {
       query: query.trim() || null,
       category: category === 'All' ? null : category,
@@ -131,13 +131,13 @@ export default function ExplorePage() {
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       {/* Search & Hero */}
-      <section className="relative overflow-hidden rounded-3xl border border-accent/20 bg-gradient-to-br from-accent/10 via-surface to-surface p-8 md:p-12">
+      <section className="relative overflow-hidden rounded-3xl border border-accent/20 bg-gradient-to-br from-accent/10 via-surface to-surface p-6 sm:p-8 md:p-12">
         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-accent/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 max-w-3xl space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent text-[10px] font-bold uppercase tracking-wider">
             <Compass className="w-3.5 h-3.5" /> Explorer Mode
           </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-fg tracking-tight leading-[1.1]">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-fg tracking-tight leading-[1.1]">
             Learn anything, <br />
             <span className="text-accent underline decoration-accent/30 underline-offset-8">swap everything.</span>
           </h1>
@@ -156,13 +156,13 @@ export default function ExplorePage() {
                 className="input-base !h-14 pl-12 !rounded-2xl !bg-surface/80 backdrop-blur-sm border-border shadow-sm focus:shadow-md transition-all text-base"
               />
             </div>
-            <div className="flex bg-surface-2 p-1.5 rounded-2xl border border-border shrink-0 h-14">
+            <div className="flex bg-surface-2 p-1.5 rounded-2xl border border-border w-full sm:w-auto">
               {(['OFFER', 'WANT', 'ALL'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => handleFilterChange({ type: t })}
                   className={cn(
-                    'px-6 py-2 rounded-xl text-sm font-bold transition-all',
+                    'flex-1 sm:flex-initial px-4 sm:px-6 py-2 rounded-xl text-sm font-bold transition-all',
                     type === t ? 'bg-surface text-accent shadow-sm border border-border' : 'text-muted hover:text-fg',
                   )}
                 >
@@ -175,7 +175,7 @@ export default function ExplorePage() {
       </section>
 
       {/* Category Scroller */}
-      <div className="sticky top-[72px] z-20 bg-bg/80 backdrop-blur-md py-4 -mx-4 px-4 border-b border-transparent transition-all">
+      <div className="sticky top-[72px] z-20 bg-bg/80 backdrop-blur-md py-4 border-b border-transparent transition-all">
         <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
           {CATEGORIES.map((cat) => (
             <button
@@ -205,14 +205,20 @@ export default function ExplorePage() {
           {totalCount != null && <span className="text-xs font-bold text-accent bg-accent/10 px-2 py-1 rounded-md">{totalCount} results</span>}
         </div>
 
-        {loading && skills.length === 0 ? (
+        {searchError && skills.length === 0 ? (
+          <div className="surface border border-danger/20 rounded-3xl p-12 text-center space-y-4 max-w-xl mx-auto">
+            <p className="text-xl font-bold text-danger">Search failed</p>
+            <p className="text-muted">{searchError.message}</p>
+            <button onClick={() => refetch()} className="btn-primary">Try again</button>
+          </div>
+        ) : loading && skills.length === 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
               <SkillCardSkeleton key={i} />
             ))}
           </div>
         ) : skills.length === 0 ? (
-          <div className="surface border border-dashed rounded-3xl p-16 text-center space-y-4 max-w-2xl mx-auto">
+          <div className="surface border border-dashed rounded-3xl p-6 sm:p-10 lg:p-16 text-center space-y-4 max-w-2xl mx-auto">
             <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-2">
               <Search className="w-8 h-8 text-muted" />
             </div>

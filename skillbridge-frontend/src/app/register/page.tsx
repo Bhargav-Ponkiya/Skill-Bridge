@@ -50,6 +50,8 @@ export default function RegisterPage() {
 
   const [registerMutation, { loading }] = useMutation(REGISTER, {
     onCompleted: (data: any) => {
+      localStorage.setItem('accessToken', data.register.accessToken);
+      if (data.register.refreshToken) localStorage.setItem('refreshToken', data.register.refreshToken);
       loginStore(data.register.user);
       router.push('/dashboard');
     },

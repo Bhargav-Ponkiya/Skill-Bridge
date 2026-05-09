@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useMemo, useState } from 'react';
+import { use, useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery, useSubscription } from '@apollo/client/react';
 import {
@@ -54,17 +54,33 @@ export default function SessionPage(props: SessionPageProps) {
   const [takeawayNotes, setTakeawayNotes] = useState('');
   const [takeawayResult, setTakeawayResult] = useState('');
   const [isGeneratingTakeaways, setIsGeneratingTakeaways] = useState(false);
+  const takeawayEsRef = useRef<EventSource | null>(null);
 
-  const { data, loading, refetch } = useQuery<any>(GET_SESSION, { variables: { id } });
+  const { data, loading, error, refetch } = useQuery<any>(GET_SESSION, { variables: { id } });
   const { data: meData } = useQuery<any>(GET_ME);
   const session = data?.session;
   const me = meData?.me;
+
+  useEffect(() => {
+    return () => {
+      if (takeawayEsRef.current) {
+        takeawayEsRef.current.close();
+        takeawayEsRef.current = null;
+      }
+    };
+  }, [id]);
+
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    refetchTimer.current = setTimeout(() => refetch(), 400);
+  }, [refetch]);
 
   // Live updates: when the partner flips status, marks complete, or edits logistics, the
   // backend pushes a `sessionUpdated` event. We refetch to get the full ResolveField graph.
   useSubscription(SESSION_UPDATED_SUBSCRIPTION, {
     variables: { sessionId: id },
-    onData: () => refetch(),
+    onData: () => debouncedRefetch(),
   });
 
   if (loading) {
@@ -75,10 +91,31 @@ export default function SessionPage(props: SessionPageProps) {
     );
   }
 
+  if (error) {
+    return (
+      <div className="max-w-md mx-auto text-center py-12 space-y-4">
+        <div className="w-12 h-12 mx-auto rounded-xl bg-danger/10 text-danger flex items-center justify-center">
+          <Loader2 className="w-6 h-6" />
+        </div>
+        <h1 className="text-2xl font-bold">Failed to load session</h1>
+        <p className="text-sm text-muted">{error.message}</p>
+        <div className="flex gap-3 justify-center">
+          <button onClick={() => refetch()} className="btn-primary inline-flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" /> Try again
+          </button>
+          <Link href="/dashboard" className="btn-secondary inline-flex items-center gap-2">
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!session) {
     return (
       <div className="max-w-md mx-auto text-center py-12 space-y-4">
         <h1 className="text-2xl font-bold">Session not found</h1>
+        <p className="text-sm text-muted">This session does not exist or has been removed.</p>
         <Link href="/dashboard" className="btn-primary inline-flex items-center gap-2">
           <ArrowLeft className="w-4 h-4" /> Back to dashboard
         </Link>
@@ -101,7 +138,7 @@ export default function SessionPage(props: SessionPageProps) {
   const isReviewable = session.status === 'COMPLETED' || session.status === 'REVIEWED';
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="w-full space-y-6 animate-fade-in pb-12">
       <div>
         <Link
           href="/matches"
@@ -117,7 +154,7 @@ export default function SessionPage(props: SessionPageProps) {
           <p className="text-xs font-semibold text-accent uppercase tracking-wider flex items-center gap-1.5">
             <ArrowLeftRight className="w-3.5 h-3.5" /> Skill exchange
           </p>
-          <h1 className="text-2xl font-bold text-fg mt-1 truncate">
+          <h1 className="text-xl sm:text-2xl font-bold text-fg mt-1 break-words">
             {session.skill1?.title} ↔ {session.skill2?.title}
           </h1>
           <p className="text-sm text-muted mt-1">
@@ -151,16 +188,16 @@ export default function SessionPage(props: SessionPageProps) {
 
       {/* Two-sided exchange overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ExchangeSide
-          sessionId={id}
-          label="You teach"
-          skill={myTeachSkill}
-          person={isP1 ? session.participant1 : session.participant2}
-          completed={myCompletion}
-          canToggle={!isLocked && (session.status === 'SCHEDULED' || session.status === 'ACTIVE')}
-          onToggled={() => refetch()}
-          isMine
-        />
+          <ExchangeSide
+            sessionId={id}
+            label="You teach"
+            skill={myTeachSkill}
+            person={isP1 ? session.participant1 : session.participant2}
+            completed={myCompletion}
+            canToggle={!isLocked && (session.status === 'SCHEDULED' || session.status === 'ACTIVE')}
+            onToggled={() => debouncedRefetch()}
+            isMine
+          />
         <ExchangeSide
           sessionId={id}
           label="You learn"
@@ -174,7 +211,7 @@ export default function SessionPage(props: SessionPageProps) {
 
       <ScheduleCard
         session={session}
-        onSaved={() => refetch()}
+        onSaved={() => debouncedRefetch()}
         isLocked={isLocked}
         partnerName={partner?.name}
         skill1Title={session.skill1?.title}
@@ -184,13 +221,12 @@ export default function SessionPage(props: SessionPageProps) {
       <ActionRow
         session={session}
         myId={me?.id}
-        onRefetch={refetch}
+        onRefetch={debouncedRefetch}
         myTeachSkill={myTeachSkill}
         partnerTeachSkill={partnerTeachSkill}
-        partnerName={partner?.name}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_400px] gap-6">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">Chat</h2>
@@ -212,7 +248,7 @@ export default function SessionPage(props: SessionPageProps) {
             )}
           </div>
           {showVideo ? (
-            <VideoRoom sessionId={id} />
+            <VideoRoom sessionId={id} userName={me?.name} />
           ) : (
             <ChatWindow sessionId={id} />
           )}
@@ -227,7 +263,8 @@ export default function SessionPage(props: SessionPageProps) {
             partnerId={partnerId}
             partnerName={partner?.name}
             isReviewable={isReviewable}
-            onReviewed={() => refetch()}
+            myId={me?.id}
+            onReviewed={() => debouncedRefetch()}
           />
         </div>
       </div>
@@ -248,33 +285,50 @@ export default function SessionPage(props: SessionPageProps) {
           </div>
 
           {!takeawayResult ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!takeawayNotes.trim()) return;
-                setIsGeneratingTakeaways(true);
-                setTakeawayResult('');
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!takeawayNotes.trim()) return;
 
-                const url = `${process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001'}/ai/session/${id}/takeaways/stream?notes=${encodeURIComponent(takeawayNotes)}`;
-                const es = new EventSource(url);
+                  if (takeawayEsRef.current) {
+                    takeawayEsRef.current.close();
+                    takeawayEsRef.current = null;
+                  }
 
-                es.onmessage = (event) => {
-                  if (event.data === '[DONE]') {
-                    es.close();
+                  setIsGeneratingTakeaways(true);
+                  setTakeawayResult('');
+
+                  const url = `${process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001'}/ai/session/${id}/takeaways/stream?notes=${encodeURIComponent(takeawayNotes)}`;
+
+                  try {
+                    takeawayEsRef.current = new EventSource(url);
+                  } catch {
                     setIsGeneratingTakeaways(false);
+                    toast.error('Failed to connect. Please try again.');
                     return;
                   }
-                  setTakeawayResult((prev) => prev + event.data);
-                };
 
-                es.onerror = () => {
-                  es.close();
-                  setIsGeneratingTakeaways(false);
-                  if (!takeawayResult) {
-                    toast.error('Failed to generate takeaways. Please try again.');
-                  }
-                };
-              }}
+                  takeawayEsRef.current.onmessage = (event) => {
+                    if (event.data === '[DONE]') {
+                      takeawayEsRef.current?.close();
+                      takeawayEsRef.current = null;
+                      setIsGeneratingTakeaways(false);
+                      return;
+                    }
+                    setTakeawayResult((prev) => prev + event.data);
+                  };
+
+                  takeawayEsRef.current.onerror = () => {
+                    if (!takeawayEsRef.current) return;
+                    if (takeawayEsRef.current.readyState === 0) return;
+                    takeawayEsRef.current.close();
+                    takeawayEsRef.current = null;
+                    setIsGeneratingTakeaways(false);
+                    if (!takeawayResult) {
+                      toast.error('Failed to generate takeaways. Please try again.');
+                    }
+                  };
+                }}
               className="space-y-3"
             >
               <textarea
@@ -356,11 +410,13 @@ export default function SessionPage(props: SessionPageProps) {
             </div>
             {session.suggestedResources ? (
               <div className="space-y-4">
-                {Object.entries(
-                  typeof session.suggestedResources === 'string'
-                    ? JSON.parse(session.suggestedResources)
-                    : session.suggestedResources
-                ).map(([skill, resources]: [string, any]) => (
+                {(() => {
+                  let parsed = session.suggestedResources;
+                  if (typeof parsed === 'string') {
+                    try { parsed = JSON.parse(parsed); } catch { parsed = {}; }
+                  }
+                  if (!parsed || typeof parsed !== 'object') return null;
+                  return Object.entries(parsed).map(([skill, resources]: [string, any]) => (
                   <div key={skill} className="space-y-2">
                     <p className="text-xs font-bold text-muted uppercase tracking-wider">{skill}</p>
                     <div className="space-y-2">
@@ -381,7 +437,7 @@ export default function SessionPage(props: SessionPageProps) {
                        ))}
                     </div>
                   </div>
-                ))}
+                ));})()}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-8 text-center space-y-2">

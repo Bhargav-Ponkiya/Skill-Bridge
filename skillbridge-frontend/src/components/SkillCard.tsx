@@ -1,6 +1,7 @@
 'use client';
 
-import { Pencil, Trash2, Eye, EyeOff, Award, LinkIcon } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Pencil, Trash2, Eye, EyeOff, Award, LinkIcon, Star, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface SkillCardSkill {
@@ -11,6 +12,7 @@ export interface SkillCardSkill {
   type: 'OFFER' | 'WANT';
   proficiencyLevel?: string | null;
   isActive?: boolean;
+  swappedCount?: number;
   user?: { 
     id: string; 
     name?: string; 
@@ -121,6 +123,11 @@ export function SkillCard({
             >
               <Award className="w-3.5 h-3.5" /> Portfolio
             </button>
+            {skill.swappedCount !== undefined && skill.swappedCount > 0 && (
+              <span className="text-[10px] text-muted-2 flex items-center gap-1">
+                <Star className="w-2.5 h-2.5" /> {skill.swappedCount} swap{skill.swappedCount !== 1 ? 's' : ''}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -149,29 +156,145 @@ export function SkillCard({
             </span>
             <div className="min-w-0">
               <span className="text-sm font-medium text-fg-soft truncate block">{skill.user.name}</span>
-              {skill.user.trustScore !== undefined && (
-                <div className="flex items-center gap-1 mt-0.5">
+              <div className="flex items-center gap-2 mt-0.5">
+                {skill.user.trustScore !== undefined && (
                   <div className="flex items-center gap-0.5 text-[10px] font-bold text-warning">
                     <Award className="w-2.5 h-2.5 fill-warning" /> {Math.round(skill.user.trustScore)}
                   </div>
-                  <span className="text-[10px] text-muted-2">({skill.user.reviewCount ?? 0})</span>
-                </div>
-              )}
+                )}
+                {skill.swappedCount !== undefined && skill.swappedCount > 0 && (
+                  <span className="text-[10px] text-muted-2">{skill.swappedCount} swap{skill.swappedCount !== 1 ? 's' : ''}</span>
+                )}
+              </div>
             </div>
           </div>
-          {onConnect && (
-            <button
-              type="button"
-              onClick={() => onConnect(skill)}
-              className="text-xs font-semibold text-accent hover:underline shrink-0"
-            >
-              Propose swap →
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            <SkillReviewDigest skillId={skill.id} skillTitle={skill.title} userId={skill.user.id} />
+            {onConnect && (
+              <button
+                type="button"
+                onClick={() => onConnect(skill)}
+                className="text-xs font-semibold text-accent hover:underline shrink-0"
+              >
+                Propose swap →
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       {footer && <div className="pt-3 border-t border-border mt-3">{footer}</div>}
+
+      <SkillReviewDigestInline
+        skillId={skill.id}
+        skillTitle={skill.title}
+        userId={skill.user?.id}
+        show={variant === 'public'}
+      />
+    </div>
+  );
+}
+
+function SkillReviewDigest({
+  skillId,
+  skillTitle,
+  userId,
+}: {
+  skillId: string;
+  skillTitle: string;
+  userId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="text-xs font-medium text-muted hover:text-accent transition-colors flex items-center gap-1"
+      >
+        <Sparkles className="w-3 h-3" /> {open ? 'Hide' : 'Reviews'}
+      </button>
+      {open && <SkillReviewDigestInline skillId={skillId} skillTitle={skillTitle} userId={userId} show />}
+    </>
+  );
+}
+
+function SkillReviewDigestInline({
+  skillId,
+  skillTitle,
+  userId,
+  show,
+}: {
+  skillId: string;
+  skillTitle: string;
+  userId?: string;
+  show: boolean;
+}) {
+  const [digest, setDigest] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const esRef = useRef<EventSource | null>(null);
+
+  if (!show || !userId) return null;
+
+  const handleGenerate = () => {
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+
+    setLoading(true);
+    setDigest('');
+    setOpened(true);
+    const backendUrl =
+      process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001';
+    const url = `${backendUrl}/ai/user/${userId}/skill/${skillId}/reviews/summary/stream?title=${encodeURIComponent(skillTitle)}`;
+
+    try {
+      esRef.current = new EventSource(url);
+    } catch {
+      setLoading(false);
+      return;
+    }
+
+    esRef.current.onmessage = (event) => {
+      if (event.data === '[DONE]') {
+        esRef.current?.close();
+        esRef.current = null;
+        setLoading(false);
+        return;
+      }
+      setDigest((prev) => prev + event.data);
+    };
+    esRef.current.onerror = () => {
+      if (!esRef.current) return;
+      if (esRef.current.readyState === 0) return;
+      esRef.current.close();
+      esRef.current = null;
+      setLoading(false);
+    };
+  };
+
+  return (
+    <div className="pt-3 border-t border-border mt-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">
+          Reviews for {skillTitle}
+        </p>
+        <button
+          onClick={handleGenerate}
+          disabled={loading}
+          className="text-xs font-medium text-accent hover:underline flex items-center gap-1"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+          {loading ? 'Generating' : opened ? 'Regenerate' : 'AI Summary'}
+        </button>
+      </div>
+      {opened && (
+        <div className="rounded-lg bg-surface-2 border border-border p-3 text-xs text-fg-soft whitespace-pre-wrap leading-relaxed min-h-[40px]">
+          {digest || (loading ? 'Reading reviews…' : '')}
+        </div>
+      )}
     </div>
   );
 }

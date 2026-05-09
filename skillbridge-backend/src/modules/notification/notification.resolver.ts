@@ -27,7 +27,7 @@ export class NotificationResolver {
 
   @Subscription(() => Notification, {
     filter: (payload, variables) => {
-      // payload data structure from PubSub publish: payload.onNotification 
+      // payload data structure from PubSub publish: payload.onNotification
       return payload.onNotification.userId === variables.userId;
     },
   })

@@ -1,4 +1,11 @@
-import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { CacheService } from './cache.service';
 
@@ -27,8 +34,13 @@ export class RateLimitGuard implements CanActivate {
     }
 
     // In Express, req.ip or req.connection.remoteAddress exists
-    const ip = req.ip || req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
-    
+    const ip =
+      req.ip ||
+      req.headers?.['x-forwarded-for'] ||
+      req.socket?.remoteAddress ||
+      req.connection?.remoteAddress ||
+      'unknown';
+
     // Extract userId if logged in, otherwise default to IP
     let identifier = ip;
     if (req.user?.id) {
@@ -48,7 +60,10 @@ export class RateLimitGuard implements CanActivate {
       }
 
       if (current > this.LIMIT) {
-        throw new HttpException('Too many requests. Please try again later.', HttpStatus.TOO_MANY_REQUESTS);
+        throw new HttpException(
+          'Too many requests. Please try again later.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
       }
       return true;
     } catch (err) {

@@ -1,16 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Loader2, ExternalLink } from 'lucide-react';
 
 interface VideoRoomProps {
   sessionId: string;
+  userName?: string;
 }
 
-export function VideoRoom({ sessionId }: VideoRoomProps) {
+export function VideoRoom({ sessionId, userName }: VideoRoomProps) {
   const [loading, setLoading] = useState(true);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const roomName = `skillbridge-${sessionId}`;
-  const jitsiUrl = `https://meet.jit.si/${roomName}#config.disableThirdPartyRequests=true&config.disableDeepLinking=true&interfaceConfig.SHOW_PROMOTIONAL_CLOSE_PAGE=false`;
+  const jitsiUrl = `https://meet.jit.si/${roomName}#config.disableThirdPartyRequests=true&config.disableDeepLinking=true&config.prejoinPageEnabled=false&config.lobbyModeEnabled=false&interfaceConfig.SHOW_PROMOTIONAL_CLOSE_PAGE=false`;
+
+  useEffect(() => {
+    if (!loading || !iframeRef.current) return;
+
+    const iframe = iframeRef.current;
+    const interval = setInterval(() => {
+      try {
+        iframe.contentWindow?.postMessage(
+          { type: 'setDisplayName', displayName: userName || 'Guest' },
+          '*',
+        );
+      } catch {
+        /* not ready yet */
+      }
+    }, 1000);
+
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 15000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [loading, userName]);
 
   return (
     <div className="surface border rounded-2xl overflow-hidden">
@@ -36,6 +63,7 @@ export function VideoRoom({ sessionId }: VideoRoomProps) {
           </div>
         )}
         <iframe
+          ref={iframeRef}
           src={jitsiUrl}
           allow="camera; microphone; fullscreen; display-capture; screen-wake-lock;"
           style={{ width: '100%', height: '100%', border: 'none' }}

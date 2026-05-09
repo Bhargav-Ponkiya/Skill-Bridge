@@ -7,10 +7,7 @@ import { Session } from '../session/session.entity';
 import { DataloaderModule } from '../dataloader/dataloader.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Review, Session]),
-    DataloaderModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Review, Session]), DataloaderModule],
   providers: [ReviewService, ReviewResolver],
   exports: [ReviewService],
 })

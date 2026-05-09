@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Loader2, Quote } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface ReputationSummaryProps {
   userId: string;
@@ -10,6 +9,7 @@ export function ReputationSummary({ userId }: ReputationSummaryProps) {
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const receivedData = useRef(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -17,19 +17,28 @@ export function ReputationSummary({ userId }: ReputationSummaryProps) {
     setLoading(true);
     setSummary('');
     setError(null);
+    receivedData.current = false;
 
     const eventSource = new EventSource(
       `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}/ai/user/${userId}/reviews/summary/stream`
     );
 
     eventSource.onmessage = (event) => {
+      if (event.data === '[DONE]') {
+        eventSource.close();
+        setLoading(false);
+        return;
+      }
+      receivedData.current = true;
       setLoading(false);
+      setError(null);
       setSummary((prev) => prev + event.data);
     };
 
-    eventSource.onerror = (err) => {
-      console.error('SSE Error:', err);
-      setError('AI summary is temporarily unavailable.');
+    eventSource.onerror = () => {
+      if (!receivedData.current) {
+        setError('AI summary is temporarily unavailable.');
+      }
       setLoading(false);
       eventSource.close();
     };

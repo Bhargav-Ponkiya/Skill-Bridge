@@ -35,7 +35,6 @@ import { Modal } from '@/components/Modal';
 import { AvailabilityEditor } from '@/components/AvailabilityEditor';
 import { Clock, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ReputationSummary } from '@/components/ReputationSummary';
 import { toast } from 'sonner';
 
 type Tab = 'offered' | 'wanted';
@@ -43,7 +42,7 @@ type Section = 'overview' | 'skills';
 
 export default function MyProfilePage() {
   const storeUser = useAuthStore((s) => s.user);
-  const { data, loading, refetch } = useQuery<any>(GET_ME, { fetchPolicy: 'cache-and-network' });
+  const { data, loading, error: meError, refetch } = useQuery<any>(GET_ME, { fetchPolicy: 'cache-and-network' });
 
   const [section, setSection] = useState<Section>('skills');
   const [tab, setTab] = useState<Tab>('offered');
@@ -122,6 +121,16 @@ export default function MyProfilePage() {
     }
   };
 
+  if (meError && !user) {
+    return (
+      <div className="min-h-[40vh] flex flex-col items-center justify-center text-center space-y-3">
+        <p className="text-danger font-semibold">Failed to load profile</p>
+        <p className="text-sm text-muted">{meError.message}</p>
+        <button onClick={() => refetch()} className="btn-primary">Try again</button>
+      </div>
+    );
+  }
+
   if (loading && !user) {
     return (
       <div className="min-h-[40vh] flex items-center justify-center">
@@ -131,7 +140,7 @@ export default function MyProfilePage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
+    <div className="w-full space-y-8 animate-fade-in">
       {/* Profile header */}
       <header className="surface rounded-2xl border p-6 md:p-8">
         <div className="flex flex-col md:flex-row gap-6 md:items-center">
@@ -143,7 +152,7 @@ export default function MyProfilePage() {
 
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-3 mb-2">
-              <h1 className="text-2xl md:text-3xl font-bold text-fg">{user?.name || 'Your name'}</h1>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-fg break-words">{user?.name || 'Your name'}</h1>
               {user?.isVerified && (
                 <span className="chip text-success border-success/20 bg-success/10">
                   <Shield className="w-3.5 h-3.5" /> Verified
@@ -275,10 +284,6 @@ export default function MyProfilePage() {
         </section>
       )}
 
-      {section === 'overview' && user?.id && (
-        <ReputationSummary userId={user.id} />
-      )}
-
       {section === 'overview' && (
         <section className="surface border rounded-2xl p-6 space-y-4">
           <div className="flex items-center gap-3">
@@ -407,7 +412,7 @@ export default function MyProfilePage() {
                   description: skillModal.skill.description ?? '',
                   category: skillModal.skill.category ?? 'Technology',
                   type: skillModal.skill.type,
-                  proficiencyLevel: (skillModal.skill.proficiencyLevel as any) ?? 'INTERMEDIATE',
+                  proficiencyLevel: (skillModal.skill.proficiencyLevel ?? 'INTERMEDIATE') as SkillFormValues['proficiencyLevel'],
                   isActive: skillModal.skill.isActive ?? true,
                 }
               : undefined
@@ -636,13 +641,13 @@ function PortfolioManager({ skillId, portfolios, onClose }: { skillId: string; p
 function Stat({
   label,
   value,
-  accent = false,
+  accent,
   icon: Icon,
 }: {
   label: string;
   value: string | number;
   accent?: boolean;
-  icon?: any;
+  icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
     <div>

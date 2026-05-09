@@ -55,6 +55,10 @@ export class User {
   @Column({ default: false })
   isGuest: boolean;
 
+  @Field({ defaultValue: 'user' })
+  @Column({ type: 'varchar', default: 'user' })
+  role: string;
+
   @Field(() => [Skill], { nullable: 'itemsAndList' })
   @OneToMany(() => Skill, (skill: Skill) => skill.user)
   skills?: Skill[];

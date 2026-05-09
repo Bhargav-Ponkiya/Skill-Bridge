@@ -24,7 +24,7 @@ export default function MatchesPage() {
   const [page, setPage] = useState(1);
   const LIMIT = 10;
 
-  const { data, loading, refetch } = useQuery<any>(GET_MY_MATCH_REQUESTS, {
+  const { data, loading, error, refetch } = useQuery<any>(GET_MY_MATCH_REQUESTS, {
     variables: { type: tab, pagination: { page, limit: LIMIT } },
     fetchPolicy: 'cache-and-network',
   });
@@ -56,14 +56,32 @@ export default function MatchesPage() {
   const requests = data?.myMatchRequests?.items ?? [];
   const meta = data?.myMatchRequests?.meta;
 
+  if (error) {
+    return (
+      <div className="w-full space-y-6 animate-fade-in">
+        <header className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-accent uppercase tracking-wider">Matches</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-fg mt-1">Swap requests</h1>
+          </div>
+        </header>
+        <div className="surface border border-danger/20 rounded-2xl p-12 text-center space-y-3">
+          <p className="text-danger font-semibold">Failed to load requests</p>
+          <p className="text-sm text-muted">{error.message}</p>
+          <button onClick={() => refetch()} className="btn-primary">Try again</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
+    <div className="w-full space-y-6 animate-fade-in">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-accent uppercase tracking-wider flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5" /> Match requests
           </p>
-          <h1 className="text-3xl font-bold text-fg mt-1">Your collaboration inbox</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-fg mt-1">Matches</h1>
           <p className="text-muted mt-1">Accept or decline incoming swaps and review what you've sent out.</p>
         </div>
 
@@ -113,7 +131,7 @@ export default function MatchesPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {requests.map((req: any) => {
             const counterpart = tab === 'received' ? req.fromUser : req.toUser;
             return (
@@ -248,7 +266,7 @@ function TabButton({
 }: {
   active: boolean;
   onClick: () => void;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
 }) {
   return (

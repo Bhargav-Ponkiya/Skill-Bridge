@@ -20,7 +20,9 @@ export class LoggingInterceptor implements NestInterceptor {
     return next.handle().pipe(
       tap(() => {
         const elapsed = Date.now() - start;
-        this.logger.log(`${info?.parentType?.name}.${info?.fieldName} — ${elapsed}ms`);
+        this.logger.log(
+          `${info?.parentType?.name}.${info?.fieldName} — ${elapsed}ms`,
+        );
       }),
     );
   }

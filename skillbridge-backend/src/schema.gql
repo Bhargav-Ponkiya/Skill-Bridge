@@ -228,6 +228,7 @@ type Query {
   """
   searchSkills(category: String, pagination: CursorPaginationInput, query: String, type: String): PaginatedSkills!
   session(id: String!): Session!
+  skillReviews(skillId: String!, userId: String!): [Review!]!
 
   """
   Top ranked OFFER skills from other users that match the current user's WANTs.
@@ -265,6 +266,8 @@ type Review {
   reviewerId: String!
   session: Session
   sessionId: String!
+  skill: Skill
+  skillId: String
   updatedAt: DateTime!
 }
 
@@ -325,6 +328,7 @@ type Skill {
   isActive: Boolean!
   portfolios: [Portfolio!]
   proficiencyLevel: ProficiencyLevel
+  swappedCount: Float!
   title: String!
   type: SkillType!
   updatedAt: DateTime!
@@ -414,7 +418,7 @@ input UpdateProfileInput {
 }
 
 input UpdateSessionInput {
-  duration: Float
+  duration: Int
   format: String
   meetingLink: String
   scheduledAt: DateTime

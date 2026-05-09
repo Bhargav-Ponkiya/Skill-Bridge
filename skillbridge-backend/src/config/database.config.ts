@@ -4,7 +4,9 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 export const databaseConfig = registerAs(
   'database',
   (): TypeOrmModuleOptions => {
-    const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/skillbridge';
+    const databaseUrl =
+      process.env.DATABASE_URL ||
+      'postgresql://postgres:postgres@localhost:5433/skillbridge';
     return {
       type: 'postgres',
       url: databaseUrl,
@@ -19,9 +21,9 @@ export const databaseConfig = registerAs(
       extra:
         process.env.NODE_ENV === 'production'
           ? {
-            max: 10,
-            connectionTimeoutMillis: 5000,
-          }
+              max: 10,
+              connectionTimeoutMillis: 5000,
+            }
           : {},
     };
   },

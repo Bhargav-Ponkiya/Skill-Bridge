@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
 import { GET_MESSAGES, GET_ME } from '@/graphql/queries';
 import { SEND_MESSAGE, SET_TYPING, MARK_SESSION_READ } from '@/graphql/mutations';
@@ -19,18 +19,32 @@ interface ChatWindowProps {
 
 export function ChatWindow({ sessionId }: ChatWindowProps) {
   const [partnerTyping, setPartnerTyping] = useState<{ name?: string } | null>(null);
+  const [wsReconnected, setWsReconnected] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
   const partnerTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: meData } = useQuery<any>(GET_ME);
-  const { data: messagesData, loading, subscribeToMore } = useQuery<any>(GET_MESSAGES, {
+  const { data: messagesData, loading, error: messagesError, subscribeToMore } = useQuery<any>(GET_MESSAGES, {
     variables: { sessionId },
   });
 
   const [setTyping] = useMutation(SET_TYPING);
   const [markSessionRead] = useMutation(MARK_SESSION_READ);
+
+  useSubscription(MESSAGE_ADDED_SUBSCRIPTION, {
+    variables: { sessionId },
+    skip: !sessionId,
+    onComplete: () => setWsReconnected(true),
+    onError: () => setWsReconnected(true),
+  });
+
+  useEffect(() => {
+    if (wsReconnected) {
+      const t = setTimeout(() => setWsReconnected(false), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [wsReconnected]);
 
   useSubscription(TYPING_CHANGED_SUBSCRIPTION, {
     variables: { sessionId },
@@ -49,15 +63,8 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     },
   });
 
-  const announceTyping = useCallback((typing: boolean) => {
-    if (isTypingRef.current === typing) return;
-    isTypingRef.current = typing;
-    setTyping({ variables: { sessionId, isTyping: typing } }).catch(() => {});
-  }, [sessionId, setTyping]);
-
   useEffect(() => {
     return () => {
-      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
       if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
       if (isTypingRef.current) {
         setTyping({ variables: { sessionId, isTyping: false } }).catch(() => {});
@@ -65,11 +72,13 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
     };
   }, [sessionId, setTyping]);
 
+  const announceTyping = useCallback((typing: boolean) => {
+    if (isTypingRef.current === typing) return;
+    isTypingRef.current = typing;
+    setTyping({ variables: { sessionId, isTyping: typing } }).catch(() => {});
+  }, [sessionId, setTyping]);
+
   const [sendMessage, { loading: sending }] = useMutation(SEND_MESSAGE, {
-    onCompleted: () => {
-      isTypingRef.current = false;
-      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
-    },
     onError: (error) => {
       console.error('Failed to send message:', error);
       toast.error('Failed to send message. Please try again.');
@@ -116,7 +125,7 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
   }, [sessionId, subscribeToMore]);
 
   const me = meData?.me;
-  const messages = messagesData?.messages ?? [];
+  const messages = useMemo(() => messagesData?.messages ?? [], [messagesData?.messages]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -140,7 +149,12 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
   return (
     <div className="surface border rounded-2xl flex flex-col h-[600px] overflow-hidden">
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4 bg-bg">
-        {loading && messages.length === 0 ? (
+        {messagesError ? (
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-3 p-6">
+            <p className="text-danger font-semibold">Failed to load messages</p>
+            <p className="text-sm text-muted">{messagesError.message}</p>
+          </div>
+        ) : loading && messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-5 h-5 animate-spin text-muted" />
           </div>
@@ -187,6 +201,13 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
         )}
       </div>
 
+      {wsReconnected && (
+        <div className="px-5 py-1.5 text-[11px] text-accent font-medium flex items-center gap-2 border-t border-border bg-accent-soft/50">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+          Reconnected
+        </div>
+      )}
+
       {partnerTyping && (
         <div className="px-5 py-1.5 text-[11px] text-muted flex items-center gap-2 border-t border-border bg-surface">
           <span className="flex items-center gap-1">
@@ -204,7 +225,7 @@ export function ChatWindow({ sessionId }: ChatWindowProps) {
         </div>
       )}
 
-      <ChatInput disabled={sending} onSendMessage={handleSend} />
+      <ChatInput disabled={sending} onSendMessage={handleSend} onTypingChange={announceTyping} />
     </div>
   );
 }

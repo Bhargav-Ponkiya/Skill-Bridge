@@ -9,6 +9,7 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  Unique,
   VersionColumn,
 } from 'typeorm';
 import { MatchRequest } from '../match/match-request.entity';
@@ -87,7 +88,11 @@ export class Session {
   skill2?: Skill;
 
   @Field(() => SessionStatus)
-  @Column({ type: 'enum', enum: SessionStatus, default: SessionStatus.NEGOTIATING })
+  @Column({
+    type: 'enum',
+    enum: SessionStatus,
+    default: SessionStatus.NEGOTIATING,
+  })
   status: SessionStatus;
 
   @Field({ nullable: true })
@@ -118,15 +123,24 @@ export class Session {
   @Column({ default: false })
   p2Completed: boolean;
 
-  @Field(() => GraphQLJSONObject, { nullable: true, description: 'JSON structure for session milestones' })
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description: 'JSON structure for session milestones',
+  })
   @Column({ type: 'jsonb', nullable: true })
   checkpoints?: any;
 
-  @Field({ nullable: true, description: 'AI-generated roadmap for future direction after this session' })
+  @Field({
+    nullable: true,
+    description: 'AI-generated roadmap for future direction after this session',
+  })
   @Column({ type: 'text', nullable: true })
   roadmap?: string;
 
-  @Field(() => GraphQLJSONObject, { nullable: true, description: 'JSON structure for AI-suggested learning resources' })
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description: 'JSON structure for AI-suggested learning resources',
+  })
   @Column({ type: 'jsonb', nullable: true })
   suggestedResources?: any;
 

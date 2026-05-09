@@ -15,8 +15,10 @@ export class NotificationConsumer {
     queue: 'notification-email-queue',
   })
   public async handleSendNotification(msg: any) {
-    this.logger.log(`Received notification request for user ${msg.userId}: ${msg.title}`);
-    
+    this.logger.log(
+      `Received notification request for user ${msg.userId}: ${msg.title}`,
+    );
+
     // Save the notification which acts as the in-app notification publisher
     await this.notificationService.create({
       userId: msg.userId,
@@ -25,7 +27,7 @@ export class NotificationConsumer {
       message: msg.message,
       relatedId: msg.relatedId,
     });
-    
+
     // Future expansion: Send the actual email notification through Sendgrid/Resend!
   }
 }

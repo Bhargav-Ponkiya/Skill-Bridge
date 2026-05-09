@@ -1,4 +1,11 @@
-import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 import { MatchRequest } from './match-request.entity';
 import { MatchService } from './match.service';
 import { CreateMatchRequestInput } from './dto/create-match-request.input';
@@ -32,18 +39,24 @@ export class MatchResolver {
     @Args('type') type: 'sent' | 'received' | 'incoming',
     @Args('pagination', { nullable: true }) pagination?: PaginationInput,
   ): Promise<PaginatedMatchRequests> {
-    return this.matchService.getMyRequests(user.id || user.sub, type, pagination);
+    return this.matchService.getMyRequests(
+      user.id || user.sub,
+      type,
+      pagination,
+    );
   }
 
   @Query(() => [SuggestedMatch], {
-    description: 'Top ranked OFFER skills from other users that match the current user\'s WANTs.',
+    description:
+      "Top ranked OFFER skills from other users that match the current user's WANTs.",
   })
   async suggestedMatches(@CurrentUser() user: any): Promise<SuggestedMatch[]> {
     return this.matchService.getSuggestedMatches(user.id || user.sub);
   }
 
   @Query(() => PaginatedSuggestedMatches, {
-    description: 'Paginated and filterable suggested matches for the explore page.',
+    description:
+      'Paginated and filterable suggested matches for the explore page.',
   })
   async suggestedMatchesExplore(
     @CurrentUser() user: any,
@@ -72,7 +85,11 @@ export class MatchResolver {
     @Args('requestId') requestId: string,
     @Args('accept') accept: boolean,
   ): Promise<MatchRequest> {
-    return this.matchService.respondToMatchRequest(user.id || user.sub, requestId, accept);
+    return this.matchService.respondToMatchRequest(
+      user.id || user.sub,
+      requestId,
+      accept,
+    );
   }
 
   @Mutation(() => MatchRequest)
@@ -109,6 +126,8 @@ export class MatchResolver {
 
   @ResolveField(() => Session, { nullable: true })
   async session(@Parent() request: MatchRequest): Promise<Session | null> {
-    return this.sessionRepository.findOne({ where: { matchRequestId: request.id } });
+    return this.sessionRepository.findOne({
+      where: { matchRequestId: request.id },
+    });
   }
 }

@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { PubSub } from 'graphql-subscriptions';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { MatchRequest, MatchRequestStatus } from './match-request.entity';
@@ -44,14 +44,21 @@ export class MatchService {
     @Inject('PUB_SUB') private readonly pubSub: PubSub,
   ) {}
 
-  async sendMatchRequest(fromUserId: string, input: CreateMatchRequestInput): Promise<MatchRequest> {
+  async sendMatchRequest(
+    fromUserId: string,
+    input: CreateMatchRequestInput,
+  ): Promise<MatchRequest> {
     if (fromUserId === input.toUserId) {
       throw new BadRequestException('Cannot send a match request to yourself.');
     }
 
-    const sender = await this.userRepository.findOne({ where: { id: fromUserId } });
+    const sender = await this.userRepository.findOne({
+      where: { id: fromUserId },
+    });
     if (sender?.isGuest) {
-      throw new BadRequestException('Guest accounts cannot send swap requests. Please register first.');
+      throw new BadRequestException(
+        'Guest accounts cannot send swap requests. Please register first.',
+      );
     }
 
     const pendingWithUser = await this.matchRequestRepository.count({
@@ -62,16 +69,24 @@ export class MatchService {
       },
     });
     if (pendingWithUser >= 3) {
-      throw new BadRequestException('You have too many pending requests with this user.');
+      throw new BadRequestException(
+        'You have too many pending requests with this user.',
+      );
     }
 
-    const offered = await this.skillRepository.findOne({ where: { id: input.offeredSkillId } });
+    const offered = await this.skillRepository.findOne({
+      where: { id: input.offeredSkillId },
+    });
     if (!offered || offered.userId !== fromUserId) {
       throw new BadRequestException('Offered skill must belong to you.');
     }
-    const wanted = await this.skillRepository.findOne({ where: { id: input.wantedSkillId } });
+    const wanted = await this.skillRepository.findOne({
+      where: { id: input.wantedSkillId },
+    });
     if (!wanted || wanted.userId !== input.toUserId) {
-      throw new BadRequestException('Wanted skill does not belong to the target user.');
+      throw new BadRequestException(
+        'Wanted skill does not belong to the target user.',
+      );
     }
 
     const existing = await this.matchRequestRepository.findOne({
@@ -83,7 +98,9 @@ export class MatchService {
       },
     });
     if (existing) {
-      throw new BadRequestException('You already have a request for this exchange.');
+      throw new BadRequestException(
+        'You already have a request for this exchange.',
+      );
     }
 
     const matchRequest = this.matchRequestRepository.create({
@@ -107,17 +124,23 @@ export class MatchService {
     const savedRequest = await this.matchRequestRepository.save(matchRequest);
 
     try {
-      await this.amqpConnection.publish('skillbridge.exchange', 'match.requested', {
-        matchRequestId: savedRequest.id,
-        fromUserId,
-        toUserId: input.toUserId,
-      });
+      await this.amqpConnection.publish(
+        'skillbridge.exchange',
+        'match.requested',
+        {
+          matchRequestId: savedRequest.id,
+          fromUserId,
+          toUserId: input.toUserId,
+        },
+      );
     } catch (err) {
       this.logger.error('Failed to publish match.requested event', err);
     }
 
     // Live push so the recipient's matches inbox updates without a refresh.
-    this.pubSub.publish('matchRequestUpdated', { matchRequestUpdated: savedRequest });
+    this.pubSub.publish('matchRequestUpdated', {
+      matchRequestUpdated: savedRequest,
+    });
 
     // Both users' suggestion lists may now have new skills to exclude.
     await this.invalidateSuggestionCache(fromUserId, input.toUserId);
@@ -125,18 +148,28 @@ export class MatchService {
     return savedRequest;
   }
 
-  async respondToMatchRequest(userId: string, requestId: string, accept: boolean): Promise<MatchRequest> {
-    const matchRequest = await this.matchRequestRepository.findOne({ where: { id: requestId, toUserId: userId } });
+  async respondToMatchRequest(
+    userId: string,
+    requestId: string,
+    accept: boolean,
+  ): Promise<MatchRequest> {
+    const matchRequest = await this.matchRequestRepository.findOne({
+      where: { id: requestId, toUserId: userId },
+    });
 
     if (!matchRequest) {
       throw new NotFoundException('Match request not found or unauthorized.');
     }
 
     if (matchRequest.status !== MatchRequestStatus.PENDING) {
-      throw new BadRequestException('Match request has already been processed.');
+      throw new BadRequestException(
+        'Match request has already been processed.',
+      );
     }
 
-    matchRequest.status = accept ? MatchRequestStatus.ACCEPTED : MatchRequestStatus.DECLINED;
+    matchRequest.status = accept
+      ? MatchRequestStatus.ACCEPTED
+      : MatchRequestStatus.DECLINED;
     const updated = await this.matchRequestRepository.save(matchRequest);
 
     if (accept) {
@@ -161,7 +194,9 @@ export class MatchService {
         // Session DB write failed — undo the accept so the user can retry cleanly.
         matchRequest.status = MatchRequestStatus.PENDING;
         await this.matchRequestRepository.save(matchRequest);
-        this.logger.error(`Failed to create session synchronously: ${(err as Error).message}`);
+        this.logger.error(
+          `Failed to create session synchronously: ${(err as Error).message}`,
+        );
         throw new InternalServerErrorException(
           'Could not create session. Please try again shortly.',
         );
@@ -170,7 +205,9 @@ export class MatchService {
       // Best-effort fan-out: notifications/emails subscribe to match.accepted. If Rabbit is down,
       // the session is already created — log and move on.
       this.amqpConnection
-        .publish('skillbridge.exchange', 'match.accepted', { matchRequestId: updated.id })
+        .publish('skillbridge.exchange', 'match.accepted', {
+          matchRequestId: updated.id,
+        })
         .catch((err) => {
           this.logger.warn(
             `Non-critical: failed to publish match.accepted: ${(err as Error).message}`,
@@ -179,7 +216,9 @@ export class MatchService {
     }
 
     // Live push so the original sender's "Sent" tab updates the moment we respond.
-    this.pubSub.publish('matchRequestUpdated', { matchRequestUpdated: updated });
+    this.pubSub.publish('matchRequestUpdated', {
+      matchRequestUpdated: updated,
+    });
 
     // Both sides may have new exclusions (acceptance creates a session) or new openings (decline).
     await this.invalidateSuggestionCache(updated.fromUserId, updated.toUserId);
@@ -187,21 +226,32 @@ export class MatchService {
     return updated;
   }
 
-  async cancelMatchRequest(userId: string, requestId: string): Promise<MatchRequest> {
-    const matchRequest = await this.matchRequestRepository.findOne({ where: { id: requestId, fromUserId: userId } });
+  async cancelMatchRequest(
+    userId: string,
+    requestId: string,
+  ): Promise<MatchRequest> {
+    const matchRequest = await this.matchRequestRepository.findOne({
+      where: { id: requestId, fromUserId: userId },
+    });
 
     if (!matchRequest) {
-      throw new NotFoundException('Match request not found or you are not the sender.');
+      throw new NotFoundException(
+        'Match request not found or you are not the sender.',
+      );
     }
 
     if (matchRequest.status !== MatchRequestStatus.PENDING) {
-      throw new BadRequestException('Only pending match requests can be cancelled.');
+      throw new BadRequestException(
+        'Only pending match requests can be cancelled.',
+      );
     }
 
     matchRequest.status = MatchRequestStatus.CANCELLED;
     const updated = await this.matchRequestRepository.save(matchRequest);
 
-    this.pubSub.publish('matchRequestUpdated', { matchRequestUpdated: updated });
+    this.pubSub.publish('matchRequestUpdated', {
+      matchRequestUpdated: updated,
+    });
 
     await this.invalidateSuggestionCache(updated.fromUserId, updated.toUserId);
 
@@ -239,17 +289,26 @@ export class MatchService {
    * how well my OFFER matches their WANT (30%) + category alignment (10%).
    * Falls back to category match when embeddings aren't available.
    */
-  async getSuggestedMatches(userId: string, limit = 12): Promise<SuggestedMatch[]> {
+  async getSuggestedMatches(
+    userId: string,
+    limit = 12,
+  ): Promise<SuggestedMatch[]> {
     const all = await this.computeSuggestedMatches(userId);
     return all.slice(0, limit);
   }
 
-  async getSuggestedMatchesPaginated(userId: string, filter: SuggestedMatchesFilterInput): Promise<PaginatedSuggestedMatches> {
+  async getSuggestedMatchesPaginated(
+    userId: string,
+    filter: SuggestedMatchesFilterInput,
+  ): Promise<PaginatedSuggestedMatches> {
     const all = await this.computeSuggestedMatches(userId);
     let filtered = all;
 
     if (filter.category) {
-      filtered = filtered.filter((m) => m.skill.category?.toLowerCase() === filter.category!.toLowerCase());
+      filtered = filtered.filter(
+        (m) =>
+          m.skill.category?.toLowerCase() === filter.category!.toLowerCase(),
+      );
     }
     if (filter.search) {
       const q = filter.search.toLowerCase();
@@ -284,7 +343,9 @@ export class MatchService {
     };
   }
 
-  private async computeSuggestedMatches(userId: string): Promise<SuggestedMatch[]> {
+  private async computeSuggestedMatches(
+    userId: string,
+  ): Promise<SuggestedMatch[]> {
     const cacheKey = `suggested_matches_v3:${userId}`;
     const cached = await this.cacheService.get<SuggestedMatch[]>(cacheKey);
     if (cached) return cached;
@@ -319,7 +380,8 @@ export class MatchService {
         id: `cold-${row.id}`,
         skill: this.rowToSkillWithUser(row),
         score: 50,
-        reason: 'Popular skill in the community — add a "Want" to your profile to get personalized matches.',
+        reason:
+          'Popular skill in the community — add a "Want" to your profile to get personalized matches.',
         matchedWantSkillId: undefined,
         matchedWantSkillTitle: undefined,
         reciprocalScore: 0,
@@ -334,7 +396,10 @@ export class MatchService {
     }
 
     // Collect candidate OFFER skills from other users that match any of my WANT skills.
-    const candidates = new Map<string, { offerRow: any; wantRow: any; distance: number | null }>();
+    const candidates = new Map<
+      string,
+      { offerRow: any; wantRow: any; distance: number | null }
+    >();
 
     for (const want of userWants) {
       let rows: any[] = [];
@@ -363,40 +428,50 @@ export class MatchService {
 
       for (const row of rows) {
         if (!candidates.has(row.id)) {
-          candidates.set(row.id, { offerRow: row, wantRow: want, distance: row.distance });
+          candidates.set(row.id, {
+            offerRow: row,
+            wantRow: want,
+            distance: row.distance,
+          });
         }
       }
     }
 
-    // For each candidate, compute bidirectional affinity.
-    const results: SuggestedMatch[] = [];
-    for (const { offerRow, wantRow, distance } of candidates.values()) {
-      const forwardAffinity = this.calculateAffinity(offerRow, wantRow, distance, completedCategories);
+    // Batch reverse score computation: one query per candidate's userId using pgvector.
+    // Build a map of userId → best reverse affinity score.
+    const reverseScoreMap = new Map<string, number>();
+    const otherUserIds = [...new Set(Array.from(candidates.values()).map((c) => c.offerRow.userId))];
 
-      // Reverse direction: how well do my OFFER skills match this user's WANT skills?
-      const otherUserId = offerRow.userId;
-      let reverseScore = 0;
-      const otherWants = await this.skillRepository.manager.query(
-        `SELECT title, category, embedding FROM skills
-         WHERE "userId" = $1 AND type = 'WANT' AND "isActive" = true`,
-        [otherUserId],
-      );
+    if (otherUserIds.length > 0 && userOffers.length > 0) {
+      const userOfferEmbeddings = userOffers.filter((o: any) => o.embedding);
+      // Compute reverse scores in a single loop over other users (no N+1 queries).
+      for (const otherUserId of otherUserIds) {
+        const otherWants = await this.skillRepository.manager.query(
+          `SELECT id, title, category, embedding FROM skills
+           WHERE "userId" = $1 AND type = 'WANT' AND "isActive" = true`,
+          [otherUserId],
+        );
+        if (!otherWants || otherWants.length === 0) continue;
 
-      if (otherWants && otherWants.length > 0 && userOffers && userOffers.length > 0) {
+        // Use pgvector cosine distance when both sides have embeddings, fall back to category match.
         let bestReverse = 0;
         for (const otherWant of otherWants) {
           for (const myOffer of userOffers) {
             let dist: number | null = null;
             if (myOffer.embedding && otherWant.embedding) {
-              const a = typeof myOffer.embedding === 'string' ? JSON.parse(myOffer.embedding) : myOffer.embedding;
-              const b = typeof otherWant.embedding === 'string' ? JSON.parse(otherWant.embedding) : otherWant.embedding;
-              const dotProduct = a.reduce((sum: number, v: number, i: number) => sum + v * b[i], 0);
-              const magA = Math.sqrt(a.reduce((sum: number, v: number) => sum + v * v, 0));
-              const magB = Math.sqrt(b.reduce((sum: number, v: number) => sum + v * v, 0));
-              if (magA > 0 && magB > 0) {
-                const cosine = dotProduct / (magA * magB);
-                dist = 1 - cosine;
-              }
+              // Use pgvector operator via raw SQL for one-shot distance.
+              const vecResult = await this.skillRepository.manager.query(
+                `SELECT ($1::vector <=> $2::vector) AS dist`,
+                [
+                  typeof myOffer.embedding === 'string'
+                    ? myOffer.embedding
+                    : JSON.stringify(myOffer.embedding),
+                  typeof otherWant.embedding === 'string'
+                    ? otherWant.embedding
+                    : JSON.stringify(otherWant.embedding),
+                ],
+              );
+              dist = vecResult[0]?.dist ?? null;
             }
             const revAffinity = this.calculateAffinity(
               { category: myOffer.category, title: myOffer.title },
@@ -404,18 +479,45 @@ export class MatchService {
               dist,
               new Set(),
             );
-            bestReverse = Math.max(bestReverse, revAffinity.total);
+            if (revAffinity.total > bestReverse) bestReverse = revAffinity.total;
           }
         }
-        reverseScore = bestReverse;
+        reverseScoreMap.set(otherUserId, bestReverse);
       }
+    }
 
-      // Blend: 60% forward (what I learn), 30% reverse (what I teach), 10% category alignment
+    const results: SuggestedMatch[] = [];
+    for (const { offerRow, wantRow, distance } of candidates.values()) {
+      const forwardAffinity = this.calculateAffinity(
+        offerRow,
+        wantRow,
+        distance,
+        completedCategories,
+      );
+
+      const reverseScore = reverseScoreMap.get(offerRow.userId) ?? 0;
       const categoryScore = offerRow.category === wantRow.category ? 100 : 0;
-      const total = Math.round(forwardAffinity.total * 0.6 + reverseScore * 0.3 + categoryScore * 0.1);
+
+      // Freshness bonus: newer skills get a small boost (up to +5 for skills created within the last week).
+      const ageHours = offerRow.createdAt
+        ? (Date.now() - new Date(offerRow.createdAt).getTime()) / 3600000
+        : 9999;
+      const freshnessBoost = Math.max(0, Math.round((1 - Math.min(ageHours, 168) / 168) * 5));
+
+      const total = Math.round(
+        forwardAffinity.total * 0.6 + reverseScore * 0.3 + categoryScore * 0.1 + freshnessBoost,
+      );
       const finalScore = Math.max(5, Math.min(99, total));
 
-      const reason = this.buildReason(finalScore, forwardAffinity.total, reverseScore, wantRow.title, offerRow.title, offerRow.category, wantRow.category);
+      const reason = this.buildReason(
+        finalScore,
+        forwardAffinity.total,
+        reverseScore,
+        wantRow.title,
+        offerRow.title,
+        offerRow.category,
+        wantRow.category,
+      );
 
       results.push({
         id: offerRow.id,
@@ -433,7 +535,21 @@ export class MatchService {
       });
     }
 
-    const ranked = results.sort((a, b) => b.score - a.score).slice(0, 20);
+    // Diversity sort: take at most 2 per user, interleave categories.
+    const byUser = new Map<string, SuggestedMatch[]>();
+    for (const r of results) {
+      const uid = (r.skill as any).user?.id || 'unknown';
+      if (!byUser.has(uid)) byUser.set(uid, []);
+      byUser.get(uid)!.push(r);
+    }
+    const diverse: SuggestedMatch[] = [];
+    for (const [, userMatches] of byUser) {
+      userMatches.sort((a, b) => b.score - a.score);
+      diverse.push(...userMatches.slice(0, 2));
+    }
+    diverse.sort((a, b) => b.score - a.score);
+    const ranked = diverse.slice(0, 20);
+
     await this.cacheService.set(cacheKey, ranked, 300);
     return ranked;
   }
@@ -448,7 +564,11 @@ export class MatchService {
     await Promise.all(
       userIds
         .filter(Boolean)
-        .map((id) => this.cacheService.del(`suggested_matches_v3:${id}`).catch(() => undefined)),
+        .map((id) =>
+          this.cacheService
+            .del(`suggested_matches_v3:${id}`)
+            .catch(() => undefined),
+        ),
     );
   }
 
@@ -480,7 +600,9 @@ export class MatchService {
     return excluded;
   }
 
-  private async computeCompletedCategories(userId: string): Promise<Set<string>> {
+  private async computeCompletedCategories(
+    userId: string,
+  ): Promise<Set<string>> {
     const categories = new Set<string>();
     const sessions = await this.sessionRepository.manager.query(
       `SELECT s.category FROM sessions sess
@@ -511,23 +633,45 @@ export class MatchService {
     } as Skill;
   }
 
-  private calculateAffinity(offer: any, want: any, distance: number | null, completedCategories: Set<string>): { total: number; semantic: number; category: number; depth: number } {
-    const semantic = distance !== null ? Math.max(0, Math.min(100, Math.round(99 - (distance * 47)))) : 0;
+  private calculateAffinity(
+    offer: any,
+    want: any,
+    distance: number | null,
+    completedCategories: Set<string>,
+  ): { total: number; semantic: number; category: number; depth: number } {
+    const semantic =
+      distance !== null
+        ? Math.max(0, Math.min(100, Math.round(99 - distance * 47)))
+        : 0;
     const category = offer.category === want.category ? 100 : 0;
-    
+
     // Depth boost: if the user has already completed a session in this category,
     // it suggests they are "learning in depth" or seeking more advanced knowledge.
     const isReturningCategory = completedCategories.has(offer.category);
-    const depth = (offer.category === want.category && isReturningCategory) ? 10 : 0;
+    const depth =
+      offer.category === want.category && isReturningCategory ? 10 : 0;
 
     // Blend: 70% semantic, 25% category, 5% depth (doubled if returning)
-    const total = Math.round((semantic * 0.7) + (category * 0.25) + depth);
-    
-    return { total: Math.max(5, Math.min(99, total)), semantic, category, depth };
+    const total = Math.round(semantic * 0.7 + category * 0.25 + depth);
+
+    return {
+      total: Math.max(5, Math.min(99, total)),
+      semantic,
+      category,
+      depth,
+    };
   }
 
-  private buildReason(score: number, forwardScore: number, reverseScore: number, wantTitle: string, offerTitle: string, offerCategory: string, wantCategory: string): string {
-    const hasReverse = reverseScore > 0;
+  private buildReason(
+    score: number,
+    forwardScore: number,
+    reverseScore: number,
+    wantTitle: string,
+    offerTitle: string,
+    offerCategory: string,
+    wantCategory: string,
+  ): string {
+    const hasReverse = reverseScore >= 30;
 
     if (score >= 85) {
       if (hasReverse) {
@@ -565,14 +709,16 @@ export class MatchService {
     const staleRequests = await this.matchRequestRepository.find({
       where: {
         status: MatchRequestStatus.PENDING,
-        createdAt: new Date(sevenDaysAgo.toISOString()),
+        createdAt: LessThan(sevenDaysAgo),
       },
       relations: ['fromUser', 'toUser', 'offeredSkill', 'wantedSkill'],
     });
 
     if (staleRequests.length === 0) return;
 
-    this.logger.log(`Auto-declining ${staleRequests.length} stale match requests`);
+    this.logger.log(
+      `Auto-declining ${staleRequests.length} stale match requests`,
+    );
 
     for (const request of staleRequests) {
       request.status = MatchRequestStatus.DECLINED;
@@ -595,10 +741,16 @@ export class MatchService {
           relatedId: request.id,
         });
       } catch (err) {
-        this.logger.error(`Failed to send expiration notifications for request ${request.id}`, err);
+        this.logger.error(
+          `Failed to send expiration notifications for request ${request.id}`,
+          err,
+        );
       }
 
-      await this.invalidateSuggestionCache(request.fromUserId, request.toUserId);
+      await this.invalidateSuggestionCache(
+        request.fromUserId,
+        request.toUserId,
+      );
     }
   }
 }

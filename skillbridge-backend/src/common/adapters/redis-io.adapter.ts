@@ -9,7 +9,10 @@ export class RedisIoAdapter extends IoAdapter {
   async connectToRedis(redisUrl: string): Promise<void> {
     const pubClient = new Redis(redisUrl);
     const subClient = pubClient.duplicate();
-    await Promise.all([pubClient.connect().catch(() => {}), subClient.connect().catch(() => {})]); // ioredis auto connects but this ensures promise resolution if preferred
+    await Promise.all([
+      pubClient.connect().catch(() => {}),
+      subClient.connect().catch(() => {}),
+    ]); // ioredis auto connects but this ensures promise resolution if preferred
     this.adapterConstructor = createAdapter(pubClient, subClient);
   }
 

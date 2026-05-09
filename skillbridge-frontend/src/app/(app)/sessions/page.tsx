@@ -60,16 +60,19 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function SessionsPage() {
-  const { data, loading, refetch } = useQuery<any>(GET_MY_SESSIONS, {
+  const { data, loading, error, refetch } = useQuery<any>(GET_MY_SESSIONS, {
     fetchPolicy: 'cache-and-network',
   });
 
   const [tab, setTab] = useState<Tab>('all');
-  const [cancelTarget, setCancelTarget] = useState<any>(null);
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; skill1?: { title: string }; skill2?: { title: string }; status: string; participant1?: { name: string }; participant2?: { name: string } } | null>(null);
   const [cancelReason, setCancelReason] = useState('');
 
-  const allSessions = data?.mySessions ?? [];
-  const filtered = tab === 'all' ? allSessions : allSessions.filter((s: any) => s.status === tab);
+  const allSessions = useMemo(() => data?.mySessions ?? [], [data?.mySessions]);
+  const filtered = useMemo(
+    () => (tab === 'all' ? allSessions : allSessions.filter((s: any) => s.status === tab)),
+    [allSessions, tab],
+  );
 
   const counts = useMemo(() => {
     return TABS.reduce((acc, t) => {
@@ -100,13 +103,13 @@ export default function SessionsPage() {
   });
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
+    <div className="w-full space-y-6 animate-fade-in">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-accent uppercase tracking-wider flex items-center gap-1.5">
             <Briefcase className="w-3.5 h-3.5" /> Sessions
           </p>
-          <h1 className="text-3xl font-bold text-fg mt-1">Your skill exchanges</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-fg mt-1">Sessions</h1>
           <p className="text-muted mt-1">Track and manage all your active and past sessions.</p>
         </div>
 
@@ -134,7 +137,13 @@ export default function SessionsPage() {
         ))}
       </div>
 
-      {loading && filtered.length === 0 ? (
+      {error ? (
+        <div className="surface border border-danger/20 rounded-2xl p-12 text-center space-y-3">
+          <p className="text-danger font-semibold">Failed to load sessions</p>
+          <p className="text-sm text-muted">{error.message}</p>
+          <button onClick={() => refetch()} className="btn-primary">Try again</button>
+        </div>
+      ) : loading && filtered.length === 0 ? (
         <div className="surface border rounded-2xl p-16 flex justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-muted" />
         </div>
@@ -156,7 +165,7 @@ export default function SessionsPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((session: any) => (
             <SessionCard
               key={session.id}

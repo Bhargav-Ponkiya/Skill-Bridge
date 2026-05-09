@@ -21,7 +21,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
             type: 'topic',
           },
         ],
-        uri: configService.get<string>('rabbitmq.url') || 'amqp://guest:guest@localhost:5672',
+        uri:
+          configService.get<string>('rabbitmq.url') ||
+          'amqp://guest:guest@localhost:5672',
         connectionInitOptions: { wait: false },
       }),
       inject: [ConfigService],

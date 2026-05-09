@@ -21,10 +21,14 @@ export class AiService {
   private readonly modelCooldownUntil = new Map<string, number>();
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>('app.geminiApiKey') ?? process.env.GEMINI_API_KEY;
+    const apiKey =
+      this.configService.get<string>('app.geminiApiKey') ??
+      process.env.GEMINI_API_KEY;
     this.hasApiKey = Boolean(apiKey);
     if (!this.hasApiKey) {
-      this.logger.warn('Initialised without GEMINI_API_KEY. AI functions will return canned output.');
+      this.logger.warn(
+        'Initialised without GEMINI_API_KEY. AI functions will return canned output.',
+      );
     }
     this.genAI = new GoogleGenerativeAI(apiKey || 'DUMMY_KEY');
 
@@ -32,30 +36,46 @@ export class AiService {
       this.configService.get<string[]>('app.geminiSummaryModels') ?? [];
     this.summaryModels = configuredModels.length
       ? configuredModels
-      : ['gemini-2.0-flash-lite', 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
-    this.logger.log(`Gemini summary fallback chain: ${this.summaryModels.join(' → ')}`);
+      : [
+          'gemini-2.0-flash-lite',
+          'gemini-flash-latest',
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+        ];
+    this.logger.log(
+      `Gemini summary fallback chain: ${this.summaryModels.join(' → ')}`,
+    );
   }
 
-  async generateEmbedding(text: string): Promise<number[]> {
+  async generateEmbedding(text: string): Promise<number[] | null> {
     if (!this.hasApiKey) {
-      return Array(768).fill(0).map(() => Math.random());
+      return null;
     }
     // Gemini updated their embedding model names in 2025
-    const models = ['text-embedding-004', 'models/text-embedding-004', 'embedding-001', 'models/embedding-001'];
+    const models = [
+      'text-embedding-004',
+      'models/text-embedding-004',
+      'embedding-001',
+      'models/embedding-001',
+    ];
     for (const modelName of models) {
       try {
         const model = this.genAI.getGenerativeModel({ model: modelName });
         const result = await model.embedContent(text);
         return result.embedding.values;
       } catch (err) {
-        this.logger.warn(`Failed to generate embedding with ${modelName}: ${(err as Error).message}`);
+        this.logger.warn(
+          `Failed to generate embedding with ${modelName}: ${(err as Error).message}`,
+        );
       }
     }
     this.logger.error('All embedding models failed.');
-    return Array(768).fill(0).map(() => Math.random());
+    return null;
   }
 
-  async *streamSessionSummary(chatHistory: string): AsyncGenerator<string, void, unknown> {
+  async *streamSessionSummary(
+    chatHistory: string,
+  ): AsyncGenerator<string, void, unknown> {
     const prompt = [
       'You are summarising a skill-sharing session strictly from the literal chat transcript below.',
       '',
@@ -98,6 +118,34 @@ export class AiService {
     yield* this.streamPrompt(prompt, `reviews:${reviewsText}`);
   }
 
+  /**
+   * Per-skill review summary. Same logic but scoped to one skill and includes the skill name.
+   */
+  async *streamSkillReviewsSummary(
+    reviewsText: string,
+    reviewCount: number,
+    skillTitle: string,
+  ): AsyncGenerator<string, void, unknown> {
+    if (reviewCount < 1) {
+      yield `No reviews yet for ${skillTitle}.`;
+      return;
+    }
+    const prompt = [
+      `You are writing a short skill-specific reputation summary for how someone teaches or exchanges "${skillTitle}", based ONLY on the verbatim reviews below.`,
+      '',
+      'Hard rules:',
+      '- Use only what reviewers actually wrote. Never invent strengths, weaknesses, or anecdotes.',
+      '- Focus specifically on the skill being discussed. Ignore mentions of other skills.',
+      '- Surface recurring themes only if multiple reviews mention them.',
+      '- If reviews are too sparse or vague to summarise, respond with EXACTLY: "Not enough reviews yet to draw a clear picture."',
+      '- 1-2 short sentences. Neutral and factual.',
+      '',
+      `Reviews for ${skillTitle} (${reviewCount} total):`,
+      reviewsText,
+    ].join('\n');
+    yield* this.streamPrompt(prompt, `skill:${skillTitle}:${reviewsText}`);
+  }
+
   private async *streamPrompt(
     prompt: string,
     cacheSeed: string,
@@ -131,16 +179,20 @@ export class AiService {
             yield chunkText;
           }
         } catch (streamErr) {
-          this.logger.error(`Stream iteration failed on ${modelName}`, streamErr);
+          this.logger.error(
+            `Stream iteration failed on ${modelName}`,
+            streamErr,
+          );
           // If we already have some content, yield it and return instead of failing the whole thing
           if (full) return;
-          throw streamErr; 
+          throw streamErr;
         }
         this.rememberSummary(cacheKey, full);
         return;
       } catch (err) {
         const message = (err as Error).message || '';
-        const quotaHit = message.includes('429') || message.toLowerCase().includes('quota');
+        const quotaHit =
+          message.includes('429') || message.toLowerCase().includes('quota');
         if (quotaHit) {
           lastQuotaError = true;
           this.markCooldown(modelName);
@@ -151,13 +203,18 @@ export class AiService {
         }
         this.logger.error(`AI stream failed on ${modelName}`, err);
         const errMessage = (err as Error).message || '';
-        const isTransient = errMessage.includes('503') || errMessage.includes('502') || errMessage.includes('504');
-        
+        const isTransient =
+          errMessage.includes('503') ||
+          errMessage.includes('502') ||
+          errMessage.includes('504');
+
         if (isTransient) {
-          this.logger.warn(`Transient error on ${modelName}; trying next model.`);
+          this.logger.warn(
+            `Transient error on ${modelName}; trying next model.`,
+          );
           continue;
         }
-        
+
         yield 'An error occurred while generating the summary.';
         return;
       }
@@ -196,7 +253,10 @@ export class AiService {
       '',
       'Keep it concise, actionable, and realistic for a peer-to-peer session.',
     ].join('\n');
-    yield* this.streamPrompt(prompt, `agenda:${offeredTitle}:${wantedTitle}:${durationMinutes}`);
+    yield* this.streamPrompt(
+      prompt,
+      `agenda:${offeredTitle}:${wantedTitle}:${durationMinutes}`,
+    );
   }
 
   async generateLearningInsights(
@@ -215,9 +275,19 @@ export class AiService {
       'No preamble.',
     ].join('\n');
 
-    const response = await this.getSinglePromptResponse(prompt, `insights:${skillTitle}:${proficiencyLevel}`);
-    if (!response || response.includes('error occurred') || response.includes('unavailable')) {
-      return { roadmap: 'Roadmap generation is currently unavailable.', resources: [] };
+    const response = await this.getSinglePromptResponse(
+      prompt,
+      `insights:${skillTitle}:${proficiencyLevel}`,
+    );
+    if (
+      !response ||
+      response.includes('error occurred') ||
+      response.includes('unavailable')
+    ) {
+      return {
+        roadmap: 'Roadmap generation is currently unavailable.',
+        resources: [],
+      };
     }
 
     try {
@@ -230,22 +300,37 @@ export class AiService {
         resources: Array.isArray(json.resources) ? json.resources : [],
       };
     } catch (e) {
-      this.logger.error(`Failed to parse AI insights JSON for ${skillTitle}`, e);
+      this.logger.error(
+        `Failed to parse AI insights JSON for ${skillTitle}`,
+        e,
+      );
       return { roadmap: 'Error parsing AI results.', resources: [] };
     }
   }
 
-  async generateRoadmap(skillTitle: string, proficiencyLevel: string): Promise<string> {
-    const insights = await this.generateLearningInsights(skillTitle, proficiencyLevel);
+  async generateRoadmap(
+    skillTitle: string,
+    proficiencyLevel: string,
+  ): Promise<string> {
+    const insights = await this.generateLearningInsights(
+      skillTitle,
+      proficiencyLevel,
+    );
     return insights.roadmap;
   }
 
   async generateResources(skillTitle: string): Promise<any[]> {
-    const insights = await this.generateLearningInsights(skillTitle, 'INTERMEDIATE');
+    const insights = await this.generateLearningInsights(
+      skillTitle,
+      'INTERMEDIATE',
+    );
     return insights.resources;
   }
 
-  async *streamTakeaways(rawNotes: string, skillTitles: string[]): AsyncGenerator<string, void, unknown> {
+  async *streamTakeaways(
+    rawNotes: string,
+    skillTitles: string[],
+  ): AsyncGenerator<string, void, unknown> {
     const prompt = [
       'You are a learning coach transforming rough post-session notes into polished takeaways.',
       '',
@@ -266,7 +351,11 @@ export class AiService {
     yield* this.streamPrompt(prompt, `takeaways:${rawNotes}`);
   }
 
-  async generateIcebreaker(wantedSkill: string, offeredSkill: string, partnerName: string): Promise<string> {
+  async generateIcebreaker(
+    wantedSkill: string,
+    offeredSkill: string,
+    partnerName: string,
+  ): Promise<string> {
     const prompt = [
       `Write a warm, 2-sentence opening message for a peer-to-peer skill exchange.`,
       `The sender wants to learn "${wantedSkill}" from ${partnerName}.`,
@@ -275,17 +364,25 @@ export class AiService {
       'Tone: friendly, genuine, and enthusiastic — not salesy or overly formal.',
       'Keep it under 60 words. Do not include greetings like "Hi" or "Hello" — just the message body.',
     ].join('\n');
-    return this.getSinglePromptResponse(prompt, `icebreaker:${wantedSkill}:${offeredSkill}:${partnerName}`);
+    return this.getSinglePromptResponse(
+      prompt,
+      `icebreaker:${wantedSkill}:${offeredSkill}:${partnerName}`,
+    );
   }
 
-  private async getSinglePromptResponse(prompt: string, cacheSeed: string): Promise<string> {
+  private async getSinglePromptResponse(
+    prompt: string,
+    cacheSeed: string,
+  ): Promise<string> {
     const start = Date.now();
     const generator = this.streamPrompt(prompt, cacheSeed);
     let full = '';
     for await (const chunk of generator) {
       full += chunk;
     }
-    this.logger.debug(`AI prompt [${cacheSeed.substring(0, 20)}...] took ${Date.now() - start}ms`);
+    this.logger.debug(
+      `AI prompt [${cacheSeed.substring(0, 20)}...] took ${Date.now() - start}ms`,
+    );
     return full;
   }
 

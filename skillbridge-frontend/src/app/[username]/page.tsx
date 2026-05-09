@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@apollo/client/react';
 import {
@@ -16,7 +16,6 @@ import {
   Star,
   Award,
   TrendingUp,
-  Play,
 } from 'lucide-react';
 import { SkillCard, type SkillCardSkill } from '@/components/SkillCard';
 import { cn } from '@/lib/utils';
@@ -91,7 +90,7 @@ export default function PublicProfilePage(props: Params) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-3 mb-2">
-                <h1 className="text-2xl md:text-3xl font-bold text-fg">{user.name}</h1>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-fg break-words">{user.name}</h1>
                 {user.isVerified && (
                   <span className="chip text-success border-success/20 bg-success/10">
                     <Shield className="w-3.5 h-3.5" /> Verified
@@ -136,7 +135,6 @@ export default function PublicProfilePage(props: Params) {
 
         {reviews.length > 0 && (
           <section className="space-y-4">
-            {user.id && reviews.length >= 2 && <ReviewDigest userId={user.id} />}
             <h2 className="text-lg font-semibold text-fg mb-3 flex items-center justify-between">
               Recent reviews
               <span className="text-sm font-medium text-muted">{reviews.length}</span>
@@ -204,7 +202,7 @@ function Stat({
   value: string | number;
   suffix?: React.ReactNode;
   accent?: boolean;
-  icon?: any;
+  icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
     <div>
@@ -215,55 +213,6 @@ function Stat({
       <p className="text-xs text-muted uppercase tracking-wider mt-0.5 flex items-center gap-1">
         {Icon && <Icon className="w-3 h-3" />} {label}
       </p>
-    </div>
-  );
-}
-
-function ReviewDigest({ userId }: { userId: string }) {
-  const [summary, setSummary] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [opened, setOpened] = useState(false);
-
-  const handleGenerate = () => {
-    setLoading(true);
-    setSummary('');
-    setOpened(true);
-    const backendUrl =
-      process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001';
-    const eventSource = new EventSource(`${backendUrl}/ai/user/${userId}/reviews/summary/stream`);
-    eventSource.onmessage = (event) => setSummary((prev) => prev + event.data);
-    eventSource.onerror = () => {
-      eventSource.close();
-      setLoading(false);
-    };
-  };
-
-  return (
-    <div className="surface border rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-accent-soft text-accent flex items-center justify-center">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-fg">AI reputation digest</h3>
-            <p className="text-[11px] text-muted">Themes pulled from real reviews — nothing invented.</p>
-          </div>
-        </div>
-        <button
-          onClick={handleGenerate}
-          disabled={loading}
-          className="btn-secondary !py-1.5 !px-3 flex items-center gap-1.5 text-xs"
-        >
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-          {loading ? 'Generating' : opened ? 'Regenerate' : 'Summarise'}
-        </button>
-      </div>
-      {opened && (
-        <div className="rounded-xl bg-surface-2 border border-border p-4 text-sm text-fg-soft whitespace-pre-wrap leading-relaxed min-h-[60px]">
-          {summary || (loading ? 'Reading reviews…' : '')}
-        </div>
-      )}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_USER_REVIEWS } from '@/graphql/queries';
 import { CREATE_REVIEW } from '@/graphql/mutations';
-import { Stars, Sparkles, Play, Star, CheckCircle2, Loader2, MessageSquare, Lock } from 'lucide-react';
+import { Sparkles, Play, Star, CheckCircle2, Loader2, MessageSquare, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -14,6 +14,7 @@ interface SummaryPanelProps {
   partnerId?: string;
   partnerName?: string;
   isReviewable: boolean;
+  myId?: string;
   onReviewed?: () => void;
 }
 
@@ -23,26 +24,29 @@ export function SummaryPanel({
   partnerId,
   partnerName,
   isReviewable,
+  myId,
   onReviewed,
 }: SummaryPanelProps) {
   const [summary, setSummary] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
-  const [retryCount, setRetryCount] = useState(0);
-  const MAX_RETRIES = 3;
+  const [submitted, setSubmitted] = useState(false);
+  const esRef = useRef<EventSource | null>(null);
 
   const { data: reviewsData, refetch: refetchReviews } = useQuery<any>(GET_USER_REVIEWS, {
     variables: { userId: partnerId ?? '' },
     skip: !partnerId,
   });
 
-  // Has the current session already been reviewed by me? Heuristic: any review for this partner
-  // tied to this sessionId. We rely on the server's REVIEWED status as the canonical signal.
-  const hasReviewed = sessionStatus === 'REVIEWED';
+  const myReview = (reviewsData?.userReviews ?? []).find(
+    (r: any) => r.sessionId === sessionId && r.reviewer?.id === myId,
+  );
+  const hasReviewed = sessionStatus === 'REVIEWED' || submitted || !!myReview;
 
   const [createReview, { loading: reviewing }] = useMutation(CREATE_REVIEW, {
     onCompleted: () => {
+      setSubmitted(true);
       refetchReviews();
       onReviewed?.();
     },
@@ -50,80 +54,55 @@ export function SummaryPanel({
   });
 
   const handleGenerate = () => {
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+
     setIsGenerating(true);
     setSummary('');
-    setRetryCount(0);
 
     const url = `${process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001'}/ai/session/${sessionId}/summary/stream`;
 
-    let eventSource: EventSource | null = null;
-
     try {
-      eventSource = new EventSource(url);
-    } catch (err) {
+      esRef.current = new EventSource(url);
+    } catch {
       toast.error('Unable to connect to the AI summary service.');
       setIsGenerating(false);
       return;
     }
 
-    eventSource.onmessage = (event) => {
+    esRef.current.onmessage = (event) => {
       if (event.data === '[DONE]') {
-        eventSource?.close();
+        esRef.current?.close();
+        esRef.current = null;
         setIsGenerating(false);
         return;
       }
       setSummary((prev) => prev + event.data);
     };
 
-    eventSource.onerror = () => {
-      if (!eventSource) return;
-
-      const readyState = eventSource.readyState;
-
+    esRef.current.onerror = () => {
+      if (!esRef.current) return;
+      const readyState = esRef.current.readyState;
       if (readyState === 0) return;
-
-      if (readyState === 2) {
-        eventSource.close();
-        eventSource = null;
-        setIsGenerating(false);
-
-        if (retryCount < MAX_RETRIES) {
-          setRetryCount((prev) => prev + 1);
-          toast.info(`Reconnecting... (${retryCount + 1}/${MAX_RETRIES})`);
-          setTimeout(() => {
-            if (!isGenerating) return;
-            try {
-              eventSource = new EventSource(url);
-            } catch {
-              toast.error('Connection to AI summary service failed.');
-              setIsGenerating(false);
-            }
-          }, 2000);
-        } else {
-          toast.error('AI summary service is unavailable. Please try again later.');
-        }
-        return;
-      }
-
-      eventSource.close();
-      eventSource = null;
+      esRef.current.close();
+      esRef.current = null;
       setIsGenerating(false);
-
       if (summary.length < 10) {
-        toast.error('Session expired or unauthorized. Please log in again.');
+        toast.error('Failed to generate summary. Please try again.');
       }
     };
-
-    eventSource.addEventListener('close', () => {
-      eventSource?.close();
-      eventSource = null;
-      setIsGenerating(false);
-      setRetryCount(0);
-    });
   };
 
   useEffect(() => {
-    return () => setSummary('');
+    return () => {
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
+      setSummary('');
+    };
   }, [sessionId]);
 
   const handleReview = (e: React.FormEvent) => {

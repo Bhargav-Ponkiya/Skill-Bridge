@@ -77,7 +77,11 @@ export class MatchRequest {
   wantedSkillSnapshot?: { title: string; description: string; level: string };
 
   @Field(() => MatchRequestStatus)
-  @Column({ type: 'enum', enum: MatchRequestStatus, default: MatchRequestStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: MatchRequestStatus,
+    default: MatchRequestStatus.PENDING,
+  })
   status: MatchRequestStatus;
 
   @Field({ nullable: true })

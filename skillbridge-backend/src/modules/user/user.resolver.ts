@@ -1,4 +1,14 @@
-import { Resolver, Query, Mutation, Args, ResolveField, Parent, Context, Float, Int } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ResolveField,
+  Parent,
+  Context,
+  Float,
+  Int,
+} from '@nestjs/graphql';
 import { Inject, forwardRef } from '@nestjs/common';
 import { User } from './user.entity';
 import { Skill } from '../skill/skill.entity';
@@ -6,8 +16,12 @@ import { SkillService } from '../skill/skill.service';
 import { UserService } from './user.service';
 import { UpdateProfileInput } from './dto/update-profile.input';
 import { UserStats } from './dto/user-stats.output';
-import { AvailabilitySlot, AvailabilitySlotInput } from './dto/availability-slot';
+import {
+  AvailabilitySlot,
+  AvailabilitySlotInput,
+} from './dto/availability-slot';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Resolver(() => User)
 export class UserResolver {
@@ -22,13 +36,16 @@ export class UserResolver {
     return this.userService.findById(user.id || user.sub);
   }
 
+  @Public()
   @Query(() => User, {
-    description: 'Look up a user by username (email local-part or display name) for the public profile page.',
+    description:
+      'Look up a user by username (email local-part or display name) for the public profile page.',
   })
   async userByUsername(@Args('identifier') identifier: string): Promise<User> {
     return this.userService.findByUsernameOrEmail(identifier);
   }
 
+  @Public()
   @Query(() => UserStats, {
     description: 'Aggregate trust + activity signals for the given user.',
   })
@@ -57,11 +74,9 @@ export class UserResolver {
    * The owner sees all their skills (active + inactive). Anyone else only sees active skills.
    */
   @ResolveField(() => [Skill])
-  async skills(
-    @Parent() user: User,
-    @Context() ctx: any,
-  ): Promise<Skill[]> {
-    const requesterId: string | undefined = ctx?.req?.user?.id || ctx?.req?.user?.sub;
+  async skills(@Parent() user: User, @Context() ctx: any): Promise<Skill[]> {
+    const requesterId: string | undefined =
+      ctx?.req?.user?.id || ctx?.req?.user?.sub;
     const all = await this.skillService.findSkillsByUserId(user.id);
     if (requesterId && requesterId === user.id) return all;
     return all.filter((s) => s.isActive);

@@ -1,6 +1,13 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { SkillType, ProficiencyLevel } from '../skill.entity';
-import { IsNotEmpty, IsEnum, IsOptional, IsString, IsBoolean, MaxLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsBoolean,
+  MaxLength,
+} from 'class-validator';
 
 @InputType()
 export class CreateSkillInput {

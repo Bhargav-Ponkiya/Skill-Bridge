@@ -35,9 +35,14 @@ export class UserStats {
   @Field(() => Int)
   portfolioCount: number;
 
-  @Field(() => Float, { description: 'A 0-100 trust signal blending reviews, completed sessions, and portfolio richness.' })
+  @Field(() => Float, {
+    description:
+      'A 0-100 trust signal blending reviews, completed sessions, and portfolio richness.',
+  })
   trustScore: number;
 
-  @Field(() => TrustBreakdown, { description: 'The individual signals that contribute to the trust score.' })
+  @Field(() => TrustBreakdown, {
+    description: 'The individual signals that contribute to the trust score.',
+  })
   trustBreakdown: TrustBreakdown;
 }

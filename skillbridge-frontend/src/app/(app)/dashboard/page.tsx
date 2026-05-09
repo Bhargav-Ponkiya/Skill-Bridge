@@ -39,20 +39,29 @@ interface SuggestedMatch {
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
 
-  const { data: meData } = useQuery<any>(GET_ME);
-  const { data: sessionsData } = useQuery<any>(GET_MY_SESSIONS);
-  const { data: requestsData } = useQuery<any>(GET_MY_MATCH_REQUESTS, { variables: { type: 'received' } });
-  const { data: suggestedData, refetch: refetchSuggested } = useQuery<any>(GET_SUGGESTED_MATCHES);
+  const { data: meData, error: meError } = useQuery<any>(GET_ME);
+  const { data: sessionsData, error: sessionsError } = useQuery<any>(GET_MY_SESSIONS);
+  const { data: requestsData, error: requestsError } = useQuery<any>(GET_MY_MATCH_REQUESTS, { variables: { type: 'received' } });
+  const { data: suggestedData, error: suggestedError, refetch: refetchSuggested } = useQuery<any>(GET_SUGGESTED_MATCHES);
 
   const myOfferSkills = useMemo(
     () => (meData?.me?.skills ?? []).filter((s: any) => s.type === 'OFFER' && s.isActive !== false),
     [meData],
   );
-  const sessions = (sessionsData?.mySessions ?? []).filter((s: any) =>
-    ['NEGOTIATING', 'SCHEDULED', 'ACTIVE'].includes(s.status),
+  const sessions = useMemo(
+    () => (sessionsData?.mySessions ?? []).filter((s: any) =>
+      ['NEGOTIATING', 'SCHEDULED', 'ACTIVE'].includes(s.status),
+    ),
+    [sessionsData],
   );
-  const requests = (requestsData?.myMatchRequests?.items ?? []).filter((r: any) => r.status === 'PENDING');
-  const suggested: SuggestedMatch[] = suggestedData?.suggestedMatches ?? [];
+  const requests = useMemo(
+    () => (requestsData?.myMatchRequests?.items ?? []).filter((r: any) => r.status === 'PENDING'),
+    [requestsData],
+  );
+  const suggested = useMemo(
+    () => (suggestedData?.suggestedMatches ?? []) as SuggestedMatch[],
+    [suggestedData],
+  );
 
   const [swap, setSwap] = useState<SuggestedMatch | null>(null);
   const [offeredSkillId, setOfferedSkillId] = useState<string>('');
@@ -93,7 +102,20 @@ export default function DashboardPage() {
     onError: (err) => toast.error(err.message),
   });
 
-  const isLoading = !sessionsData || !requestsData || !meData;
+  const hasError = meError || sessionsError || requestsError || suggestedError;
+  const isLoading = !sessionsData || !requestsData || !meData || !suggestedData;
+
+  if (hasError) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center text-center space-y-4">
+        <p className="text-danger font-semibold">Something went wrong loading your dashboard.</p>
+        <p className="text-sm text-muted">Please try refreshing the page.</p>
+        <button onClick={() => window.location.reload()} className="btn-primary">
+          Refresh page
+        </button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -125,10 +147,10 @@ export default function DashboardPage() {
             <p className="text-xs font-semibold text-accent uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" /> Today on SkillBridge
             </p>
-            <h1 className="text-3xl md:text-4xl font-bold text-fg tracking-tight">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-fg tracking-tight">
               Welcome back, {user?.name?.split(' ')[0] || 'there'}
             </h1>
-            <p className="text-muted max-w-2xl">
+            <p className="text-muted max-w-full lg:max-w-2xl">
               {requests.length > 0
                 ? `You have ${requests.length} new match ${requests.length === 1 ? 'request' : 'requests'} waiting.`
                 : `Browse curated matches below or open Explore to discover more skills.`}

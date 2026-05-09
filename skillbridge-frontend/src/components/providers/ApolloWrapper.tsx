@@ -34,6 +34,7 @@ function AuthSync({ children }: { children: React.ReactNode }) {
     if (data?.me) {
       login(data.me);
     } else if (error || (!loading && data && !data.me)) {
+      localStorage.removeItem('accessToken');
       setLoading(false);
     }
   }, [data, loading, error, login, setLoading, mounted, token]);

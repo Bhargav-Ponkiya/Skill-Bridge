@@ -8,12 +8,11 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 @Resolver(() => Message)
 @UseGuards(JwtAuthGuard)
 export class MessageSubscriptionResolver {
-  constructor(
-    @Inject('PUB_SUB') private readonly pubSub: PubSub,
-  ) {}
+  constructor(@Inject('PUB_SUB') private readonly pubSub: PubSub) {}
 
   @Subscription(() => Message, {
-    filter: (payload: any, variables: any) => payload.messageAdded.sessionId === variables.sessionId,
+    filter: (payload: any, variables: any) =>
+      payload.messageAdded.sessionId === variables.sessionId,
   })
   messageAdded(@Args('sessionId') _sessionId: string) {
     return this.pubSub.asyncIterableIterator('messageAdded');

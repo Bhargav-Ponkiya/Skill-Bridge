@@ -1,5 +1,5 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
-import { IsOptional, IsString, IsDateString, IsInt, Min } from 'class-validator';
+import { IsOptional, IsString, IsInt, Min } from 'class-validator';
 
 @InputType()
 export class UpdateSessionInput {
@@ -17,8 +17,10 @@ export class UpdateSessionInput {
   @IsOptional()
   scheduledAt?: Date;
 
-  @Field({ nullable: true })
+  @Field(() => Int, { nullable: true })
   @IsOptional()
+  @IsInt()
+  @Min(1)
   duration?: number;
 
   @Field(() => Int)

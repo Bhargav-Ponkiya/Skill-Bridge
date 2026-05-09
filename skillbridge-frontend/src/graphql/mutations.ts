@@ -4,6 +4,7 @@ export const LOGIN = gql`
   mutation Login($input: LoginInput!) {
     login(input: $input) {
       accessToken
+      refreshToken
       user {
         id
         name
@@ -18,6 +19,7 @@ export const REGISTER = gql`
   mutation Register($input: RegisterInput!) {
     register(input: $input) {
       accessToken
+      refreshToken
       user {
         id
         name
@@ -31,6 +33,7 @@ export const GUEST_LOGIN = gql`
   mutation GuestLogin {
     guestLogin {
       accessToken
+      refreshToken
       user {
         id
         name
@@ -240,6 +243,21 @@ export const CANCEL_MATCH_REQUEST = gql`
     cancelMatchRequest(requestId: $requestId) {
       id
       status
+    }
+  }
+`;
+
+export const REFRESH_TOKEN = gql`
+  mutation RefreshToken($token: String!) {
+    refreshToken(token: $token) {
+      accessToken
+      user {
+        id
+        name
+        email
+        avatar
+        isGuest
+      }
     }
   }
 `;

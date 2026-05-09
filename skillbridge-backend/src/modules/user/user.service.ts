@@ -4,7 +4,10 @@ import { Repository, In } from 'typeorm';
 import { User } from './user.entity';
 import { UpdateProfileInput } from './dto/update-profile.input';
 import { UserStats } from './dto/user-stats.output';
-import { AvailabilitySlot, AvailabilitySlotInput } from './dto/availability-slot';
+import {
+  AvailabilitySlot,
+  AvailabilitySlotInput,
+} from './dto/availability-slot';
 import { Skill, SkillType } from '../skill/skill.entity';
 import { Portfolio } from '../skill/portfolio.entity';
 import { Session, SessionStatus } from '../session/session.entity';
@@ -58,7 +61,10 @@ export class UserService {
    * startMinute < endMinute and no overlapping windows on the same day (overlapping
    * windows get merged so the partner sees one block instead of two).
    */
-  async setAvailability(id: string, slots: AvailabilitySlotInput[]): Promise<AvailabilitySlot[]> {
+  async setAvailability(
+    id: string,
+    slots: AvailabilitySlotInput[],
+  ): Promise<AvailabilitySlot[]> {
     const user = await this.findById(id);
     const normalised = this.normaliseAvailability(slots);
     user.availability = normalised;
@@ -66,7 +72,9 @@ export class UserService {
     return normalised;
   }
 
-  private normaliseAvailability(slots: AvailabilitySlotInput[]): AvailabilitySlot[] {
+  private normaliseAvailability(
+    slots: AvailabilitySlotInput[],
+  ): AvailabilitySlot[] {
     const valid = (slots ?? []).filter(
       (s) =>
         Number.isInteger(s.day) &&
@@ -81,7 +89,11 @@ export class UserService {
     const byDay = new Map<number, AvailabilitySlot[]>();
     for (const s of valid) {
       const list = byDay.get(s.day) ?? [];
-      list.push({ day: s.day, startMinute: s.startMinute, endMinute: s.endMinute });
+      list.push({
+        day: s.day,
+        startMinute: s.startMinute,
+        endMinute: s.endMinute,
+      });
       byDay.set(s.day, list);
     }
     const merged: AvailabilitySlot[] = [];
@@ -108,7 +120,14 @@ export class UserService {
   }
 
   async getUserStats(userId: string): Promise<UserStats> {
-    const [reviews, offeredCount, wantedCount, portfolios, completedSessions, totalEndorsements] = await Promise.all([
+    const [
+      reviews,
+      offeredCount,
+      wantedCount,
+      portfolios,
+      completedSessions,
+      totalEndorsements,
+    ] = await Promise.all([
       this.reviewRepository.find({ where: { revieweeId: userId } }),
       this.skillRepository.count({ where: { userId, type: SkillType.OFFER } }),
       this.skillRepository.count({ where: { userId, type: SkillType.WANT } }),
@@ -119,7 +138,9 @@ export class UserService {
         .getCount(),
       this.sessionRepository
         .createQueryBuilder('s')
-        .where('(s.participant1Id = :userId OR s.participant2Id = :userId)', { userId })
+        .where('(s.participant1Id = :userId OR s.participant2Id = :userId)', {
+          userId,
+        })
         .andWhere('s.status IN (:...statuses)', {
           statuses: [SessionStatus.COMPLETED, SessionStatus.REVIEWED],
         })
@@ -132,18 +153,22 @@ export class UserService {
     ]);
 
     const reviewCount = reviews.length;
-    const averageRating = reviewCount === 0
-      ? 0
-      : reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviewCount;
+    const averageRating =
+      reviewCount === 0
+        ? 0
+        : reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviewCount;
 
     const endorsementCount = parseInt(totalEndorsements?.total || '0', 10) || 0;
 
     // Trust score: blend of review quality, completed sessions, portfolio richness, and skill endorsements.
-    const reviewSignal = Math.min(35, reviewCount * 4) * (averageRating / 5 || 0.5);
+    const reviewSignal =
+      Math.min(35, reviewCount * 4) * (averageRating / 5 || 0.5);
     const sessionSignal = Math.min(25, completedSessions * 5);
     const portfolioSignal = Math.min(20, portfolios * 6);
     const endorsementSignal = Math.min(20, endorsementCount * 10);
-    const trustScore = Math.round(reviewSignal + sessionSignal + portfolioSignal + endorsementSignal);
+    const trustScore = Math.round(
+      reviewSignal + sessionSignal + portfolioSignal + endorsementSignal,
+    );
 
     return {
       reviewCount,

@@ -13,12 +13,14 @@ import {
   Clock,
   CheckCircle2,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ComponentType } from 'react';
 
 type Item = {
   id: string;
-  icon: any;
+  icon: ComponentType<{ className?: string }>;
   title: string;
   meta: string;
   href: string;
@@ -28,7 +30,7 @@ type Item = {
 };
 
 export default function NotificationsPage() {
-  const { data: notificationsData, refetch: refetchNotifications } = useQuery<any>(
+  const { data: notificationsData, loading, error, refetch: refetchNotifications } = useQuery<any>(
     GET_MY_NOTIFICATIONS,
     { fetchPolicy: 'cache-and-network' },
   );
@@ -58,8 +60,46 @@ export default function NotificationsPage() {
 
   const unreadCount = sorted.filter((i) => !i.isRead).length;
 
+  if (loading && items.length === 0) {
+    return (
+      <div className="w-full lg:max-w-4xl space-y-6 animate-fade-in">
+        <header className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-accent uppercase tracking-wider flex items-center gap-1.5">
+              <Bell className="w-3.5 h-3.5" /> Notifications
+            </p>
+            <h1 className="text-3xl font-bold text-fg mt-1">Activity feed</h1>
+          </div>
+        </header>
+        <div className="surface border rounded-2xl p-16 flex justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-muted" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full lg:max-w-4xl space-y-6 animate-fade-in">
+        <header className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-accent uppercase tracking-wider flex items-center gap-1.5">
+              <Bell className="w-3.5 h-3.5" /> Notifications
+            </p>
+            <h1 className="text-3xl font-bold text-fg mt-1">Activity feed</h1>
+          </div>
+        </header>
+        <div className="surface border border-danger/20 rounded-2xl p-12 text-center space-y-3">
+          <p className="text-danger font-semibold">Failed to load notifications</p>
+          <p className="text-sm text-muted">{error.message}</p>
+          <button onClick={() => refetchNotifications()} className="btn-primary">Try again</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
+    <div className="w-full lg:max-w-4xl space-y-6 animate-fade-in">
       <header className="flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-accent uppercase tracking-wider flex items-center gap-1.5">

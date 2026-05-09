@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [login, { loading: loginLoading }] = useMutation(LOGIN, {
     onCompleted: (data: any) => {
       localStorage.setItem('accessToken', data.login.accessToken);
+      if (data.login.refreshToken) localStorage.setItem('refreshToken', data.login.refreshToken);
       loginStore(data.login.user);
       router.push('/dashboard');
     },
@@ -27,6 +28,7 @@ export default function LoginPage() {
   const [guestLogin, { loading: guestLoading }] = useMutation(GUEST_LOGIN, {
     onCompleted: (data: any) => {
       localStorage.setItem('accessToken', data.guestLogin.accessToken);
+      if (data.guestLogin.refreshToken) localStorage.setItem('refreshToken', data.guestLogin.refreshToken);
       loginStore(data.guestLogin.user);
       router.push('/dashboard');
     },

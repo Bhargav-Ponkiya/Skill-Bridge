@@ -6,12 +6,12 @@ import { Send, Loader2 } from 'lucide-react';
 interface ChatInputProps {
   disabled?: boolean;
   onSendMessage: (content: string) => void;
+  onTypingChange?: (typing: boolean) => void;
 }
 
-export function ChatInput({ disabled, onSendMessage }: ChatInputProps) {
+export function ChatInput({ disabled, onSendMessage, onTypingChange }: ChatInputProps) {
   const [input, setInput] = useState('');
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onTypingChangeRef = useRef<((typing: boolean) => void) | null>(null);
 
   useEffect(() => {
     return () => {
@@ -19,36 +19,30 @@ export function ChatInput({ disabled, onSendMessage }: ChatInputProps) {
     };
   }, []);
 
+  const emitTyping = useCallback((typing: boolean) => {
+    onTypingChange?.(typing);
+  }, [onTypingChange]);
+
   const handleInputChange = useCallback((value: string) => {
     setInput(value);
-    if (onTypingChangeRef.current) {
-      if (value.trim().length === 0) {
-        onTypingChangeRef.current(false);
-        if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
-        return;
-      }
-      onTypingChangeRef.current(true);
+    if (value.trim().length === 0) {
+      emitTyping(false);
       if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
-      typingDebounceRef.current = setTimeout(() => onTypingChangeRef.current?.(false), 1500);
+      return;
     }
-  }, []);
+    emitTyping(true);
+    if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+    typingDebounceRef.current = setTimeout(() => emitTyping(false), 1500);
+  }, [emitTyping]);
 
   const handleSend = useCallback((e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || disabled) return;
     onSendMessage(input.trim());
     setInput('');
-    if (onTypingChangeRef.current) onTypingChangeRef.current(false);
+    emitTyping(false);
     if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
-  }, [input, disabled, onSendMessage]);
-
-  // Expose typing callbacks via ref so parent can attach handlers without re-renders.
-  useEffect(() => {
-    (window as any).__chatInputTypingHandlers = {
-      setOnChange: (fn: (typing: boolean) => void) => { onTypingChangeRef.current = fn; },
-    };
-    return () => { delete (window as any).__chatInputTypingHandlers; };
-  }, []);
+  }, [input, disabled, onSendMessage, emitTyping]);
 
   return (
     <form onSubmit={handleSend} className="p-3 border-t border-border bg-surface flex gap-2">

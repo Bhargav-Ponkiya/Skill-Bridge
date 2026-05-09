@@ -1,4 +1,4 @@
-import { InputType, Field, PartialType } from '@nestjs/graphql';
+import { InputType, PartialType } from '@nestjs/graphql';
 import { CreateSkillInput } from './create-skill.input';
 
 @InputType()

@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { join } from 'path';
 import * as Joi from 'joi';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { ThrottlerGuard } from '@nestjs/throttler';
 
 import { appConfig } from './config/app.config';
 import { redisConfig } from './config/redis.config';
@@ -57,7 +56,10 @@ import { RateLimitGuard } from './modules/cache/rate-limit.guard';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      ssl: false,
+      ssl:
+        process.env.NODE_ENV === 'production'
+          ? { rejectUnauthorized: false }
+          : false,
       autoLoadEntities: true,
       synchronize: process.env.NODE_ENV !== 'production',
       logging: false,
@@ -81,15 +83,20 @@ import { RateLimitGuard } from './modules/cache/rate-limit.guard';
       context: ({ req, res, connectionParams }: any) => {
         const ctxReq = req || { headers: {} };
         if (connectionParams) {
-          const normalizedHeaders = Object.keys(connectionParams).reduce((acc, key) => {
-            acc[key.toLowerCase()] = connectionParams[key];
-            return acc;
-          }, {} as any);
+          const normalizedHeaders = Object.keys(connectionParams).reduce(
+            (acc, key) => {
+              acc[key.toLowerCase()] = connectionParams[key];
+              return acc;
+            },
+            {} as any,
+          );
           ctxReq.headers = { ...ctxReq.headers, ...normalizedHeaders };
           ctxReq.connectionParams = connectionParams;
           // Passport strategies often use req.get('header-name')
           if (!ctxReq.get) {
-            ctxReq.get = function(name: string) { return this.headers[name.toLowerCase()]; };
+            ctxReq.get = function (name: string) {
+              return this.headers[name.toLowerCase()];
+            };
           }
         }
         return { req: ctxReq, res };

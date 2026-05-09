@@ -1,4 +1,13 @@
-import { Resolver, Query, Mutation, Args, ResolveField, Parent, Int } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ResolveField,
+  Parent,
+  Int,
+} from '@nestjs/graphql';
+import { Max, Min } from 'class-validator';
 import { Inject } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 import { Message } from './message.entity';
@@ -17,8 +26,22 @@ export class MessageResolver {
   ) {}
 
   @Query(() => [Message])
-  async messages(@Args('sessionId') sessionId: string): Promise<Message[]> {
-    return this.messageService.getMessagesBySession(sessionId);
+  async messages(
+    @CurrentUser() user: any,
+    @Args('sessionId') sessionId: string,
+    @Args('limit', { type: () => Int, nullable: true })
+    @Max(500)
+    limit?: number,
+    @Args('offset', { type: () => Int, nullable: true })
+    @Min(0)
+    offset?: number,
+  ): Promise<Message[]> {
+    return this.messageService.getMessagesBySession(
+      sessionId,
+      user.id || user.sub,
+      limit,
+      offset,
+    );
   }
 
   @Mutation(() => Message)
@@ -26,7 +49,10 @@ export class MessageResolver {
     @CurrentUser() user: any,
     @Args('input') input: CreateMessageInput,
   ): Promise<Message> {
-    const message = await this.messageService.createMessage(user.id || user.sub, input);
+    const message = await this.messageService.createMessage(
+      user.id || user.sub,
+      input,
+    );
     this.pubSub.publish('messageAdded', { messageAdded: message });
     // Sending a message implicitly stops the "is typing…" indicator for this user.
     this.pubSub.publish('typingChanged', {

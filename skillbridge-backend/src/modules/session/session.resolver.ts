@@ -1,4 +1,11 @@
-import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 import { Session, SessionStatus } from './session.entity';
 import { SessionService } from './session.service';
 import { UpdateSessionInput } from './dto/update-session.input';
@@ -33,7 +40,11 @@ export class SessionResolver {
     @Args('id') id: string,
     @Args('input') input: UpdateSessionInput,
   ): Promise<Session> {
-    return this.sessionService.updateSessionDetails(user.id || user.sub, id, input);
+    return this.sessionService.updateSessionDetails(
+      user.id || user.sub,
+      id,
+      input,
+    );
   }
 
   @Mutation(() => Session)
@@ -42,7 +53,11 @@ export class SessionResolver {
     @Args('id') id: string,
     @Args('status', { type: () => SessionStatus }) status: SessionStatus,
   ): Promise<Session> {
-    return this.sessionService.advanceSessionStatus(user.id || user.sub, id, status);
+    return this.sessionService.advanceSessionStatus(
+      user.id || user.sub,
+      id,
+      status,
+    );
   }
 
   @Mutation(() => Session)
@@ -59,7 +74,11 @@ export class SessionResolver {
     @Args('id') id: string,
     @Args('reason', { nullable: true }) reason?: string,
   ): Promise<Session> {
-    return this.sessionService.cancelSession(user.id || user.sub, id, reason ?? '');
+    return this.sessionService.cancelSession(
+      user.id || user.sub,
+      id,
+      reason ?? '',
+    );
   }
 
   @ResolveField(() => User)

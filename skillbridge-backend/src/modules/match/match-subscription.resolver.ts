@@ -17,7 +17,9 @@ export class MatchSubscriptionResolver {
   @Subscription(() => MatchRequest, {
     filter: (payload: any, variables: any) => {
       const r = payload.matchRequestUpdated;
-      return r.fromUserId === variables.userId || r.toUserId === variables.userId;
+      return (
+        r.fromUserId === variables.userId || r.toUserId === variables.userId
+      );
     },
   })
   matchRequestUpdated(@Args('userId') _userId: string) {

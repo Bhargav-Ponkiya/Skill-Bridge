@@ -1,11 +1,11 @@
 import { InputType, Field, PartialType, ID } from '@nestjs/graphql';
 import { AddPortfolioInput } from './add-portfolio.input';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsUUID } from 'class-validator';
 
 @InputType()
 export class UpdatePortfolioInput extends PartialType(AddPortfolioInput) {
   @Field(() => ID)
   @IsNotEmpty()
-  @IsString()
+  @IsUUID()
   id: string;
 }

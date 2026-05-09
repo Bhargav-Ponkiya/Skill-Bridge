@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMutation } from '@apollo/client/react';
 import { CHANGE_SESSION_STATUS, TOGGLE_SESSION_PROGRESS, CANCEL_SESSION } from '@/graphql/mutations';
 import { toast } from 'sonner';
@@ -12,14 +12,12 @@ export function ActionRow({
   onRefetch,
   myTeachSkill,
   partnerTeachSkill,
-  partnerName,
 }: {
   session: any;
   myId?: string;
   onRefetch: () => void;
   myTeachSkill: any;
   partnerTeachSkill: any;
-  partnerName?: string;
 }) {
   const [changeStatus, { loading: changing }] = useMutation(CHANGE_SESSION_STATUS, {
     onCompleted: () => onRefetch(),
@@ -47,8 +45,14 @@ export function ActionRow({
   const [showAgendaModal, setShowAgendaModal] = useState(false);
   const [agendaContent, setAgendaContent] = useState('');
   const [agendaLoading, setAgendaLoading] = useState(false);
+  const agendaEsRef = useRef<EventSource | null>(null);
 
   const handleGenerateAgenda = () => {
+    if (agendaEsRef.current) {
+      agendaEsRef.current.close();
+      agendaEsRef.current = null;
+    }
+
     setShowAgendaModal(true);
     setAgendaContent('');
     setAgendaLoading(true);
@@ -60,17 +64,28 @@ export function ActionRow({
     const params = new URLSearchParams({ offered, wanted, duration: String(duration) });
     const url = `${baseURL}/ai/agenda?${params.toString()}`;
 
-    const eventSource = new EventSource(url);
-    eventSource.onmessage = (event) => {
+    try {
+      agendaEsRef.current = new EventSource(url);
+    } catch {
+      setAgendaLoading(false);
+      toast.error('Failed to connect. Please try again.');
+      return;
+    }
+
+    agendaEsRef.current.onmessage = (event) => {
       if (event.data === '[DONE]') {
-        eventSource.close();
+        agendaEsRef.current?.close();
+        agendaEsRef.current = null;
         setAgendaLoading(false);
         return;
       }
       setAgendaContent((prev) => prev + event.data);
     };
-    eventSource.onerror = () => {
-      eventSource.close();
+    agendaEsRef.current.onerror = () => {
+      if (!agendaEsRef.current) return;
+      if (agendaEsRef.current.readyState === 0) return;
+      agendaEsRef.current.close();
+      agendaEsRef.current = null;
       setAgendaLoading(false);
       toast.error('Failed to generate agenda. Please try again.');
     };

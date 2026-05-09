@@ -1,16 +1,27 @@
-import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, UnauthorizedException } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as cookie from 'cookie';
 
 @WebSocketGateway({
   namespace: '/session',
   cors: {
-    origin: '*',
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true,
   },
 })
-export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class SessionGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -21,7 +32,7 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
   async handleConnection(client: Socket) {
     try {
-      const cookieHeader = client.handshake.headers.cookie as string | undefined;
+      const cookieHeader = client.handshake.headers.cookie;
       const cookies = cookieHeader ? cookie.parse(cookieHeader) : {};
       const accessToken = cookies.accessToken;
 
@@ -88,6 +99,9 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @MessageBody() payload: { sessionId: string; content: string },
   ) {
     const userId = (client as any).userId as string;
+    // NOTE: This is a lightweight real-time relay only. Messages are NOT persisted here.
+    // The canonical persistence path is the GraphQL sendMessage mutation. Clients should
+    // use the mutation for reliable delivery and use this socket channel for optimistic UI.
     this.server.to(payload.sessionId).emit('newMessage', {
       sessionId: payload.sessionId,
       senderId: userId,
@@ -102,7 +116,9 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @MessageBody() payload: { sessionId: string },
   ) {
     const userId = (client as any).userId as string;
-    client.to(payload.sessionId).emit('typing:start', { userId, sessionId: payload.sessionId });
+    client
+      .to(payload.sessionId)
+      .emit('typing:start', { userId, sessionId: payload.sessionId });
   }
 
   @SubscribeMessage('typing:stop')
@@ -111,7 +127,9 @@ export class SessionGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @MessageBody() payload: { sessionId: string },
   ) {
     const userId = (client as any).userId as string;
-    client.to(payload.sessionId).emit('typing:stop', { userId, sessionId: payload.sessionId });
+    client
+      .to(payload.sessionId)
+      .emit('typing:stop', { userId, sessionId: payload.sessionId });
   }
 
   isUserOnline(userId: string): boolean {

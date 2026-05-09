@@ -1,4 +1,11 @@
-import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 import { Skill } from './skill.entity';
 import { User } from '../user/user.entity';
 import { SkillService } from './skill.service';
@@ -25,7 +32,8 @@ export class SkillResolver {
   ) {}
 
   @Query(() => PaginatedSkills, {
-    description: 'Search active skills offered by other users (excludes the current user).',
+    description:
+      'Search active skills offered by other users (excludes the current user).',
   })
   async searchSkills(
     @CurrentUser() user: any,
@@ -34,7 +42,13 @@ export class SkillResolver {
     @Args('type', { nullable: true }) type?: string,
     @Args('pagination', { nullable: true }) pagination?: CursorPaginationInput,
   ): Promise<PaginatedSkills> {
-    return this.skillService.searchSkills(user.id || user.sub, query, category, type, pagination);
+    return this.skillService.searchSkills(
+      user.id || user.sub,
+      query,
+      category,
+      type,
+      pagination,
+    );
   }
 
   @Query(() => [Skill])

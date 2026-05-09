@@ -14,11 +14,27 @@ export class DataloaderService {
     private readonly skillService: SkillService,
   ) {}
 
-  public readonly userLoader = new DataLoader<string, User>(async (userIds: readonly string[]) => {
-    return this.userService.findManyByIds(userIds);
-  });
+  public readonly userLoader = new DataLoader<string, User | null>(
+    async (userIds: readonly string[]) => {
+      try {
+        const users = await this.userService.findManyByIds(userIds);
+        const map = new Map(users.map((u) => [u.id, u]));
+        return userIds.map((id) => map.get(id) ?? null);
+      } catch {
+        return userIds.map(() => null);
+      }
+    },
+  );
 
-  public readonly skillLoader = new DataLoader<string, Skill>(async (skillIds: readonly string[]) => {
-    return this.skillService.findManyByIds(skillIds);
-  });
+  public readonly skillLoader = new DataLoader<string, Skill | null>(
+    async (skillIds: readonly string[]) => {
+      try {
+        const skills = await this.skillService.findManyByIds(skillIds);
+        const map = new Map(skills.map((s) => [s.id, s]));
+        return skillIds.map((id) => map.get(id) ?? null);
+      } catch {
+        return skillIds.map(() => null);
+      }
+    },
+  );
 }

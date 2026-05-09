@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useQuery, useApolloClient } from '@apollo/client/react';
-import { GET_ME, GET_MY_NOTIFICATIONS } from '@/graphql/queries';
+import { GET_MY_NOTIFICATIONS } from '@/graphql/queries';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { cn } from '@/lib/utils';
 
@@ -73,10 +73,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
     router.push('/login');
   };
 
-  const { data: meData } = useQuery<any>(GET_ME, { skip: !user });
   const { data: notifData } = useQuery<any>(GET_MY_NOTIFICATIONS, {
     skip: !user,
-    pollInterval: 30000, // refresh every 30s
+    pollInterval: 30000,
   });
   const unreadCount = (notifData?.myNotifications ?? []).filter((n: any) => !n.isRead).length;
 
@@ -100,12 +99,20 @@ export default function AppLayout({ children }: AppLayoutProps) {
     );
   }
 
-  const displayUser = meData?.me ?? user;
+  const displayUser = user;
 
   return (
     <div className="flex min-h-screen bg-bg text-fg">
+      {/* Skip-to-content link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[200] focus:px-4 focus:py-2 focus:bg-accent focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none"
+      >
+        Skip to main content
+      </a>
+
       {/* Sidebar — desktop */}
-      <aside className="hidden lg:flex flex-col w-64 surface border-r border-border fixed h-full z-20">
+      <aside role="navigation" aria-label="Main navigation" className="hidden lg:flex flex-col w-64 surface border-r border-border fixed h-full z-20">
         <Link href="/dashboard" className="flex items-center gap-2 p-5">
           <div className="w-9 h-9 bg-accent rounded-lg flex items-center justify-center shadow-sm">
             <Zap className="w-5 h-5 text-white" />
@@ -128,6 +135,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <ThemeToggle />
           <button
             onClick={handleLogout}
+            aria-label="Sign out"
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-danger hover:bg-danger/10 transition-colors"
           >
             <LogOut className="w-4 h-4" />
@@ -190,12 +198,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   </div>
                   <span className="font-bold">SkillBridge</span>
                 </Link>
-                <button onClick={() => setMobileOpen(false)} className="p-2 text-muted">
+                  <button onClick={() => setMobileOpen(false)} aria-label="Close menu" className="p-2 text-muted">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <nav className="space-y-1 flex-1">
+              <nav role="navigation" aria-label="Mobile navigation" className="space-y-1 flex-1">
                 {NAV.map((item) => (
                   <NavItem
                     key={item.name}
@@ -220,7 +228,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
         )}
 
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6">{children}</main>
+        <main id="main-content" role="main" className="flex-1 px-4 sm:px-6 lg:px-8 py-6 overflow-x-hidden">{children}</main>
       </div>
     </div>
   );
