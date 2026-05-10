@@ -47,30 +47,52 @@ export class AiService {
     );
   }
 
-  async generateEmbedding(text: string): Promise<number[] | null> {
+  async generateEmbedding(text: string): Promise<number[]> {
     if (!this.hasApiKey) {
-      return null;
+      return this.fallbackEmbedding();
     }
-    // Gemini updated their embedding model names in 2025
-    const models = [
-      'text-embedding-004',
-      'models/text-embedding-004',
-      'embedding-001',
-      'models/embedding-001',
-    ];
+    const apiKey =
+      this.configService.get<string>('app.geminiApiKey') ??
+      process.env.GEMINI_API_KEY;
+    if (!apiKey) return this.fallbackEmbedding();
+
+    const models = ['text-embedding-004', 'embedding-001'];
     for (const modelName of models) {
       try {
-        const model = this.genAI.getGenerativeModel({ model: modelName });
-        const result = await model.embedContent(text);
-        return result.embedding.values;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:embedContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: { parts: [{ text }] },
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          this.logger.warn(
+            `Embedding HTTP ${res.status} for ${modelName}: ${body.substring(0, 200)}`,
+          );
+          continue;
+        }
+        const json = await res.json();
+        if (json?.embedding?.values) {
+          return json.embedding.values;
+        }
       } catch (err) {
         this.logger.warn(
-          `Failed to generate embedding with ${modelName}: ${(err as Error).message}`,
+          `Embedding failed for ${modelName}: ${(err as Error).message}`,
         );
       }
     }
-    this.logger.error('All embedding models failed.');
-    return null;
+    this.logger.warn(
+      'All embedding API calls failed — using random fallback vectors. ' +
+        'Matching falls back to category-based similarity.',
+    );
+    return this.fallbackEmbedding();
+  }
+
+  private fallbackEmbedding(): number[] {
+    return Array.from({ length: 768 }, () => Math.random() * 2 - 1);
   }
 
   async *streamSessionSummary(

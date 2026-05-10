@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { SEARCH_SKILLS, GET_ME } from '@/graphql/queries';
 import { SEND_MATCH_REQUEST } from '@/graphql/mutations';
-import { Search, Loader2, Compass, Zap, ArrowRight } from 'lucide-react';
+import { Search, Loader2, Compass, Zap, ArrowRight, Sparkles } from 'lucide-react';
 import { SkillCard, type SkillCardSkill } from '@/components/SkillCard';
 import { SkillCardSkeleton } from '@/components/Skeletons';
 import { Modal } from '@/components/Modal';
@@ -43,6 +43,31 @@ export default function ExplorePage() {
   const skills: SkillCardSkill[] = data?.searchSkills?.edges?.map((e: any) => e.node) ?? [];
   const pageInfo = data?.searchSkills?.pageInfo;
   const totalCount = data?.searchSkills?.totalCount;
+
+  const [isGeneratingIcebreaker, setIsGeneratingIcebreaker] = useState(false);
+
+  const generateIcebreaker = async () => {
+    if (!swap || !swap.user) return;
+    const mySkill = myOfferSkills.find((s: any) => s.id === offeredSkillId);
+    if (!mySkill) {
+      toast.info('Select a skill you teach first, then generate.');
+      return;
+    }
+    setIsGeneratingIcebreaker(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001';
+      const res = await fetch(
+        `${baseUrl}/ai/icebreaker?wanted=${encodeURIComponent(swap.title)}&offered=${encodeURIComponent(mySkill.title)}&partner=${encodeURIComponent(swap.user?.name ?? 'Partner')}`,
+      );
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setMessage(data.message);
+    } catch {
+      toast.error('Could not generate icebreaker. Try again.');
+    } finally {
+      setIsGeneratingIcebreaker(false);
+    }
+  };
 
   const [sendMatchRequest, { loading: sending }] = useMutation(SEND_MATCH_REQUEST, {
     onCompleted: () => {
@@ -317,7 +342,22 @@ export default function ExplorePage() {
             </div>
 
             <label className="block space-y-2">
-              <span className="label-base">Personal note (optional)</span>
+              <div className="flex items-center justify-between">
+                <span className="label-base">Personal note (optional)</span>
+                <button
+                  type="button"
+                  onClick={generateIcebreaker}
+                  disabled={isGeneratingIcebreaker}
+                  className="text-[10px] font-semibold text-accent hover:underline disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isGeneratingIcebreaker ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" />
+                  )}
+                  Generate AI Icebreaker
+                </button>
+              </div>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}

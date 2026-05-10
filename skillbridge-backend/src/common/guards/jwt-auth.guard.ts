@@ -1,4 +1,8 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { GqlExecutionContext } from '@nestjs/graphql';
@@ -10,16 +14,24 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     if (context.getType() === 'rpc') return true;
 
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) return true;
+    if (isPublic) {
+      // For public routes: still try to authenticate so @CurrentUser() gets populated,
+      // but don't block the request if auth fails (returns null for user).
+      try {
+        return (await super.canActivate(context)) as boolean;
+      } catch {
+        return true;
+      }
+    }
 
-    return super.canActivate(context);
+    return (await super.canActivate(context)) as boolean;
   }
 
   getRequest(context: ExecutionContext) {
@@ -28,5 +40,25 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return ctx.getContext().req;
     }
     return context.switchToHttp().getRequest() ?? { headers: {} };
+  }
+
+  handleRequest(
+    err: any,
+    user: any,
+    info: any,
+    context: ExecutionContext,
+    status?: any,
+  ) {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      // For public routes: return null instead of throwing
+      if (err || !user) return null;
+      return user;
+    }
+    if (err || !user) throw err || new UnauthorizedException();
+    return user;
   }
 }

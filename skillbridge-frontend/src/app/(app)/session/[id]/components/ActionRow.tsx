@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useMutation } from '@apollo/client/react';
 import { CHANGE_SESSION_STATUS, TOGGLE_SESSION_PROGRESS, CANCEL_SESSION } from '@/graphql/mutations';
 import { toast } from 'sonner';
 import { Modal } from '@/components/Modal';
-import { Loader2, Calendar, Play, CheckCircle2, Sparkles, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Loader2, Play, CheckCircle2, Sparkles, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function ActionRow({
@@ -36,6 +36,11 @@ export function ActionRow({
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const closeCancelModal = useCallback(() => {
+    setShowCancelModal(false);
+    setCancelReason('');
+  }, []);
 
   const isP1 = session.participant1Id === myId;
   const myCompletion = isP1 ? session.p1Completed : session.p2Completed;
@@ -114,18 +119,7 @@ export function ActionRow({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        {session.status === 'NEGOTIATING' && session.scheduledAt && session.format && (
-          <button
-            onClick={() => changeStatus({
-              variables: { id: session.id, status: 'SCHEDULED' },
-            })}
-            disabled={changing}
-            className="btn-secondary flex items-center gap-1.5 !py-2"
-          >
-            <Calendar className="w-3.5 h-3.5" /> Confirm schedule
-          </button>
-        )}
-        {session.status === 'SCHEDULED' && (
+        {(session.status === 'NEGOTIATING' || session.status === 'SCHEDULED') && (
           <button
             onClick={() => changeStatus({
               variables: { id: session.id, status: 'ACTIVE' },
@@ -176,7 +170,7 @@ export function ActionRow({
 
     <Modal
       open={showCancelModal}
-      onClose={() => { setShowCancelModal(false); setCancelReason(''); }}
+      onClose={closeCancelModal}
       title="Cancel session"
       description="This will notify your partner and close the session."
       size="sm"
@@ -218,7 +212,7 @@ export function ActionRow({
       open={showAgendaModal}
       onClose={() => { setShowAgendaModal(false); setAgendaContent(''); }}
       title="AI Session Agenda"
-      description={`Suggested structure for your ${session.duration || 60}-minute exchange.`}
+      description="Suggested structure for your session."
       size="md"
     >
       <div className="space-y-4">

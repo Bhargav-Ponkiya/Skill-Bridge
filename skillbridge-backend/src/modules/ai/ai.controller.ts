@@ -295,6 +295,7 @@ export class AiController {
     });
   }
 
+  @Public()
   @Get('icebreaker')
   async getIcebreaker(
     @Query('wanted') wantedSkill: string,

@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Logger,
   OnApplicationBootstrap,
   Inject,
@@ -17,6 +18,7 @@ import {
   MatchRequest,
   MatchRequestStatus,
 } from '../match/match-request.entity';
+import { User } from '../user/user.entity';
 import { AiService } from '../ai/ai.service';
 import { Skill } from '../skill/skill.entity';
 import { NotificationService } from '../notification/notification.service';
@@ -33,6 +35,8 @@ export class SessionService implements OnApplicationBootstrap {
     private matchRequestRepository: Repository<MatchRequest>,
     @InjectRepository(Skill)
     private skillRepository: Repository<Skill>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     @Inject('PUB_SUB') private readonly pubSub: PubSub,
     private readonly aiService: AiService,
     private readonly notificationService: NotificationService,
@@ -77,6 +81,18 @@ export class SessionService implements OnApplicationBootstrap {
       }
     } catch (err) {
       this.logger.warn(`Session backfill skipped: ${(err as Error).message}`);
+    }
+  }
+
+  private async assertNotGuest(userId: string): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['isGuest'],
+    });
+    if (user?.isGuest) {
+      throw new ForbiddenException(
+        'Guest accounts cannot perform this action. Please register first.',
+      );
     }
   }
 
@@ -128,6 +144,7 @@ export class SessionService implements OnApplicationBootstrap {
     sessionId: string,
     input: UpdateSessionInput,
   ): Promise<Session> {
+    await this.assertNotGuest(userId);
     const session = await this.getSession(userId, sessionId);
 
     if (session.version !== input.version) {
@@ -219,6 +236,7 @@ export class SessionService implements OnApplicationBootstrap {
     sessionId: string,
     targetStatus: SessionStatus,
   ): Promise<Session> {
+    await this.assertNotGuest(userId);
     const session = await this.getSession(userId, sessionId);
 
     const allowed: Record<SessionStatus, SessionStatus[]> = {
@@ -248,9 +266,7 @@ export class SessionService implements OnApplicationBootstrap {
     }
 
     if (targetStatus === SessionStatus.ACTIVE && !session.scheduledAt) {
-      throw new BadRequestException(
-        'Session must be scheduled before it can be started.',
-      );
+      session.scheduledAt = new Date();
     }
 
     const result = await this.dataSource.query(
@@ -302,6 +318,7 @@ export class SessionService implements OnApplicationBootstrap {
     userId: string,
     sessionId: string,
   ): Promise<Session> {
+    await this.assertNotGuest(userId);
     const session = await this.getSession(userId, sessionId);
 
     if (
@@ -397,6 +414,7 @@ export class SessionService implements OnApplicationBootstrap {
     sessionId: string,
     reason: string,
   ): Promise<Session> {
+    await this.assertNotGuest(userId);
     const session = await this.getSession(userId, sessionId);
 
     if (

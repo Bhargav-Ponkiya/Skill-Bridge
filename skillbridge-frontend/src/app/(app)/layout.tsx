@@ -74,7 +74,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   };
 
   const { data: notifData } = useQuery<any>(GET_MY_NOTIFICATIONS, {
-    skip: !user,
+    skip: !user || user.isGuest,
     pollInterval: 30000,
   });
   const unreadCount = (notifData?.myNotifications ?? []).filter((n: any) => !n.isRead).length;

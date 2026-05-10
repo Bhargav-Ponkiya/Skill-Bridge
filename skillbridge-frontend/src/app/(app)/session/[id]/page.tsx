@@ -271,8 +271,8 @@ export default function SessionPage(props: SessionPageProps) {
 
       {partnerId && <PartnerReputation userId={partnerId} name={partner?.name} />}
 
-      {/* AI Takeaways - COMPLETED sessions */}
-      {session.status === 'COMPLETED' && (
+      {/* AI Takeaways - COMPLETED or REVIEWED sessions */}
+      {(session.status === 'COMPLETED' || session.status === 'REVIEWED') && (
         <section className="surface border rounded-2xl p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-accent-soft text-accent flex items-center justify-center">
@@ -372,8 +372,8 @@ export default function SessionPage(props: SessionPageProps) {
         </section>
       )}
 
-      {/* AI Roadmap & Resources - Only show when completed */}
-      {session.status === 'COMPLETED' && (
+      {/* AI Roadmap & Resources - Only show when completed or reviewed */}
+      {(session.status === 'COMPLETED' || session.status === 'REVIEWED') && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <section className="surface border rounded-2xl p-6 space-y-4">
             <div className="flex items-center gap-3">

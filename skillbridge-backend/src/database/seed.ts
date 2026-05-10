@@ -107,6 +107,13 @@ const SKILL_META: Record<
   },
 };
 
+const FUTURE_DATE = new Date();
+FUTURE_DATE.setDate(FUTURE_DATE.getDate() + 3);
+FUTURE_DATE.setHours(14, 0, 0, 0);
+
+const PAST_DATE = new Date();
+PAST_DATE.setDate(PAST_DATE.getDate() - 7);
+
 async function seed() {
   console.log('Connecting to database...');
   const ds = await AppDataSource.initialize();
@@ -189,7 +196,10 @@ async function seed() {
   }
   console.log(`  Created ${Object.keys(skillRecords).length} skills.`);
 
-  // Match request 1: user1 -> user2 (React <-> Python)
+  // ──────────────────────────────────────────────
+  // SESSION 1: NEGOTIATING  (user1 ↔ user2)
+  // Test: ScheduleCard, Start button, ChatWindow
+  // ──────────────────────────────────────────────
   console.log('Creating match request: user1 -> user2...');
   const u1u2Request = repo.matchRequests.create({
     fromUserId: userRecords['user1@test.com'].id,
@@ -212,9 +222,8 @@ async function seed() {
   });
   await repo.matchRequests.save(u1u2Request);
 
-  // Session 1: user1 <-> user2 (NEGOTIATING)
-  console.log('Creating session: user1 <-> user2...');
-  const session = repo.sessions.create({
+  console.log('  Creating NEGOTIATING session (user1 ↔ user2)...');
+  const sessionNegotiating = repo.sessions.create({
     matchRequestId: u1u2Request.id,
     participant1Id: userRecords['user1@test.com'].id,
     participant2Id: userRecords['user2@test.com'].id,
@@ -225,11 +234,10 @@ async function seed() {
     format: SessionFormat.VIDEO,
     meetingLink: 'https://meet.google.com/abc-defg-hij',
   });
-  await repo.sessions.save(session);
+  await repo.sessions.save(sessionNegotiating);
 
-  // Chat messages in the session
-  console.log('Creating messages...');
-  const messages = [
+  // Chat messages in the NEGOTIATING session
+  const negotiatingMessages = [
     {
       senderId: userRecords['user1@test.com'].id,
       content: 'Hi! Excited to learn Python with you. When are you free?',
@@ -249,28 +257,228 @@ async function seed() {
         "Sounds like a plan. I've set up a meeting link for our first session.",
     },
   ];
-  for (const m of messages) {
+  for (const m of negotiatingMessages) {
     await repo.messages.save(
       repo.messages.create({
-        sessionId: session.id,
+        sessionId: sessionNegotiating.id,
         senderId: m.senderId,
         content: m.content,
       }),
     );
   }
-  console.log(`  Created ${messages.length} messages.`);
+  console.log(`  Created ${negotiatingMessages.length} chat messages.`);
 
-  // Match request 2: user3 -> user4 (Node.js <-> UI/UX)
-  console.log('Creating match request: user3 -> user4...');
+  // ──────────────────────────────────────────────
+  // SESSION 2: SCHEDULED  (user3 ↔ user5)
+  // Test: ActionRow "Start Session" button, ICS download, Mark Complete
+  // ──────────────────────────────────────────────
+  console.log('Creating match request: user3 -> user5...');
+  const u3u5Request = repo.matchRequests.create({
+    fromUserId: userRecords['user3@test.com'].id,
+    toUserId: userRecords['user5@test.com'].id,
+    offeredSkillId: skillRecords['user3@test.com:DevOps'].id,
+    wantedSkillId: skillRecords['user3@test.com:TypeScript'].id,
+    offeredSkillSnapshot: {
+      title: 'DevOps',
+      description: 'Docker, CI/CD pipelines, Kubernetes basics',
+      level: 'INTERMEDIATE',
+    },
+    wantedSkillSnapshot: {
+      title: 'TypeScript',
+      description: 'Advanced generics, utility types, strict mode patterns',
+      level: 'EXPERT',
+    },
+    status: MatchRequestStatus.ACCEPTED,
+    message: 'DevOps for TypeScript? Sounds like a great trade!',
+  });
+  await repo.matchRequests.save(u3u5Request);
+
+  console.log('  Creating SCHEDULED session (user3 ↔ user5)...');
+  const sessionScheduled = repo.sessions.create({
+    matchRequestId: u3u5Request.id,
+    participant1Id: userRecords['user3@test.com'].id,
+    participant2Id: userRecords['user5@test.com'].id,
+    skill1Id: skillRecords['user3@test.com:DevOps'].id,
+    skill2Id: skillRecords['user5@test.com:Java'].id,
+    status: SessionStatus.SCHEDULED,
+    scheduledAt: FUTURE_DATE,
+    duration: 90,
+    format: SessionFormat.VIDEO,
+    meetingLink: 'https://meet.google.com/xyz-uvw-rst',
+  });
+  await repo.sessions.save(sessionScheduled);
+
+  // Chat messages in the SCHEDULED session
+  const scheduledMessages = [
+    {
+      senderId: userRecords['user3@test.com'].id,
+      content: 'Thanks for scheduling! I have prepared some DevOps materials.',
+    },
+    {
+      senderId: userRecords['user5@test.com'].id,
+      content:
+        "Great! I'll walk you through Java basics. See you on the call.",
+    },
+  ];
+  for (const m of scheduledMessages) {
+    await repo.messages.save(
+      repo.messages.create({
+        sessionId: sessionScheduled.id,
+        senderId: m.senderId,
+        content: m.content,
+      }),
+    );
+  }
+  console.log(`  Created ${scheduledMessages.length} chat messages.`);
+
+  // ──────────────────────────────────────────────
+  // SESSION 3: COMPLETED  (user4 ↔ user2)
+  // Test: Review form, SummaryPanel, AI Roadmap/Resources
+  // ──────────────────────────────────────────────
+  console.log('Creating match request: user4 -> user2...');
+  const u4u2Request = repo.matchRequests.create({
+    fromUserId: userRecords['user4@test.com'].id,
+    toUserId: userRecords['user2@test.com'].id,
+    offeredSkillId: skillRecords['user4@test.com:UI/UX'].id,
+    wantedSkillId: skillRecords['user4@test.com:React'].id,
+    offeredSkillSnapshot: {
+      title: 'UI/UX',
+      description: 'User research, wireframing, prototyping',
+      level: 'EXPERT',
+    },
+    wantedSkillSnapshot: {
+      title: 'React',
+      description: 'Component design, hooks, state management',
+      level: 'EXPERT',
+    },
+    status: MatchRequestStatus.ACCEPTED,
+    message: 'UI/UX for React — a perfect match!',
+  });
+  await repo.matchRequests.save(u4u2Request);
+
+  console.log('  Creating COMPLETED session (user4 ↔ user2)...');
+  const sessionCompleted = repo.sessions.create({
+    matchRequestId: u4u2Request.id,
+    participant1Id: userRecords['user4@test.com'].id,
+    participant2Id: userRecords['user2@test.com'].id,
+    skill1Id: skillRecords['user4@test.com:UI/UX'].id,
+    skill2Id: skillRecords['user2@test.com:React'].id,
+    status: SessionStatus.COMPLETED,
+    scheduledAt: PAST_DATE,
+    duration: 120,
+    format: SessionFormat.VIDEO,
+    meetingLink: 'https://meet.google.com/old-completed-session',
+    p1Completed: true,
+    p2Completed: true,
+    roadmap:
+      '### For UI/UX:\n' +
+      '- Week 1: Master design thinking and user research methods\n' +
+      '- Week 2: Learn advanced prototyping in Figma\n' +
+      '- Week 3: Study usability testing and accessibility\n' +
+      '\n' +
+      '### For React:\n' +
+      '- Week 1: Deep dive into hooks and custom hooks\n' +
+      '- Week 2: Learn state management with Zustand\n' +
+      '- Week 3: Build a full-stack app with Next.js',
+    suggestedResources: {
+      'UI/UX': [
+        {
+          title: 'Designing Interfaces',
+          url: 'https://www.designinginterfaces.com/',
+          description: 'Patterns for effective interaction design',
+        },
+        {
+          title: 'Nielsen Norman Group',
+          url: 'https://www.nngroup.com/articles/',
+          description: 'UX research and usability guidelines',
+        },
+      ],
+      React: [
+        {
+          title: 'React Docs (Beta)',
+          url: 'https://react.dev/',
+          description: 'Official React documentation with examples',
+        },
+        {
+          title: 'State Management with Zustand',
+          url: 'https://docs.pmnd.rs/zustand/getting-started/introduction',
+          description: 'Lightweight state management for React',
+        },
+      ],
+    },
+  });
+  await repo.sessions.save(sessionCompleted);
+
+  // Chat messages in the COMPLETED session
+  const completedMessages = [
+    {
+      senderId: userRecords['user4@test.com'].id,
+      content:
+        'Great session! I learned a lot about React hooks and component composition.',
+    },
+    {
+      senderId: userRecords['user2@test.com'].id,
+      content:
+        'Likewise! Your Figma prototyping tips were super helpful. Thanks!',
+    },
+  ];
+  for (const m of completedMessages) {
+    await repo.messages.save(
+      repo.messages.create({
+        sessionId: sessionCompleted.id,
+        senderId: m.senderId,
+        content: m.content,
+      }),
+    );
+  }
+
+  // Increment swappedCount for both skills in completed session
+  await ds.query(
+    `UPDATE skills SET "swappedCount" = "swappedCount" + 1 WHERE id IN ($1, $2)`,
+    [
+      skillRecords['user4@test.com:UI/UX'].id,
+      skillRecords['user2@test.com:React'].id,
+    ],
+  );
+  console.log('  Incremented swappedCount for completed skills.');
+
+  // Reviews for the completed session
+  await ds.query(
+    `INSERT INTO reviews (id, "sessionId", "reviewerId", "revieweeId", rating, comment, "skillId", "createdAt", "updatedAt")
+     VALUES (uuid_generate_v4(), $1, $2, $3, 5, 'Amazing teacher! Explained React hooks clearly with great examples.', $4, now(), now())`,
+    [
+      sessionCompleted.id,
+      userRecords['user4@test.com'].id,
+      userRecords['user2@test.com'].id,
+      skillRecords['user2@test.com:React'].id,
+    ],
+  );
+  await ds.query(
+    `INSERT INTO reviews (id, "sessionId", "reviewerId", "revieweeId", rating, comment, "skillId", "createdAt", "updatedAt")
+     VALUES (uuid_generate_v4(), $1, $2, $3, 4, 'Great UI/UX insights. Would have loved more time on design systems.', $4, now(), now())`,
+    [
+      sessionCompleted.id,
+      userRecords['user2@test.com'].id,
+      userRecords['user4@test.com'].id,
+      skillRecords['user4@test.com:UI/UX'].id,
+    ],
+  );
+  console.log('  Created 2 reviews for completed session.');
+
+  // ──────────────────────────────────────────────
+  // PENDING MATCH REQUEST  (user3 → user4)
+  // Test: Accept/Decline flow on Matches page
+  // ──────────────────────────────────────────────
+  console.log('Creating pending match request: user3 -> user4...');
   const u3u4Request = repo.matchRequests.create({
     fromUserId: userRecords['user3@test.com'].id,
     toUserId: userRecords['user4@test.com'].id,
-    offeredSkillId: skillRecords['user3@test.com:Node.js'].id,
+    offeredSkillId: skillRecords['user3@test.com:DevOps'].id,
     wantedSkillId: skillRecords['user3@test.com:UI/UX'].id,
     offeredSkillSnapshot: {
-      title: 'Node.js',
-      description: 'Express/NestJS, REST APIs, authentication',
-      level: 'EXPERT',
+      title: 'DevOps',
+      description: 'Docker, CI/CD pipelines, Kubernetes basics',
+      level: 'INTERMEDIATE',
     },
     wantedSkillSnapshot: {
       title: 'UI/UX',
@@ -278,33 +486,46 @@ async function seed() {
       level: 'EXPERT',
     },
     status: MatchRequestStatus.PENDING,
-    message: "Hey! I'd love to trade Node.js knowledge for UI/UX design tips.",
+    message: "Hey! I can teach you DevOps if you help me with UI/UX design.",
   });
   await repo.matchRequests.save(u3u4Request);
+  console.log('  Created pending match request.');
 
+  // ──────────────────────────────────────────────
+  // PORTFOLIOS for user1's skills
+  // ──────────────────────────────────────────────
+  console.log('Creating portfolios...');
+  await ds.query(
+    `INSERT INTO portfolios (id, title, url, type, "skillId", "createdAt", "updatedAt")
+     VALUES (uuid_generate_v4(), 'E-Commerce Dashboard (React)', 'https://github.com/user1/react-dashboard', 'github', $1, now(), now())`,
+    [skillRecords['user1@test.com:React'].id],
+  );
+  await ds.query(
+    `INSERT INTO portfolios (id, title, url, type, "skillId", "createdAt", "updatedAt")
+     VALUES (uuid_generate_v4(), 'TypeScript Utility Library', 'https://github.com/user1/ts-utils', 'github', $1, now(), now())`,
+    [skillRecords['user1@test.com:TypeScript'].id],
+  );
+  console.log('  Created 2 portfolio entries.');
+
+  // ──────────────────────────────────────────────
+  // SUMMARY
+  // ──────────────────────────────────────────────
+  console.log('');
   console.log('Seed complete!');
   console.log('');
   console.log('Users:');
-  console.log(
-    '  user1@test.com / password123 — teaches: React, TypeScript      | wants: Python, DevOps',
-  );
-  console.log(
-    '  user2@test.com / password123 — teaches: Python, ML            | wants: React, UI/UX',
-  );
-  console.log(
-    '  user3@test.com / password123 — teaches: Node.js, DevOps       | wants: ML, TypeScript, UI/UX',
-  );
-  console.log(
-    '  user4@test.com / password123 — teaches: UI/UX, Figma          | wants: Node.js, React',
-  );
-  console.log(
-    '  user5@test.com / password123 — teaches: Java, Spring Boot     | wants: Python, DevOps',
-  );
+  console.log('  user1@test.com / password123 — teaches: React, TypeScript      | wants: Python, DevOps');
+  console.log('  user2@test.com / password123 — teaches: Python, ML            | wants: React, UI/UX');
+  console.log('  user3@test.com / password123 — teaches: Node.js, DevOps       | wants: ML, TypeScript, UI/UX');
+  console.log('  user4@test.com / password123 — teaches: UI/UX, Figma          | wants: Node.js, React');
+  console.log('  user5@test.com / password123 — teaches: Java, Spring Boot     | wants: Python, DevOps');
   console.log('');
-  console.log(
-    'Active session: user1 <-> user2 (NEGOTIATING) with 4 chat messages',
-  );
-  console.log('Pending request: user3 -> user4');
+  console.log('Session lifecycle scenarios:');
+  console.log('  1. NEGOTIATING — user1 ↔ user2 (React ↔ Python)           → test ScheduleCard + Start/Cancel');
+  console.log('  2. SCHEDULED  — user3 ↔ user5 (DevOps ↔ Java)            → test Start Session + Mark Complete');
+  console.log('  3. COMPLETED  — user4 ↔ user2 (UI/UX ↔ React) + reviews  → test review form, AI roadmap, resources');
+  console.log('  4. PENDING    — user3 → user4 (DevOps → UI/UX)           → test Accept/Decline on Matches page');
+  console.log('');
 
   await ds.destroy();
   process.exit(0);

@@ -9,8 +9,9 @@ export class MatchConsumer {
     exchange: 'skillbridge.exchange',
     routingKey: 'match.requested',
     queue: 'match-processing-queue',
+    allowNonJsonMessages: true,
   })
-  public async handleMatchRequested(msg: any) {
+  public handleMatchRequested(msg: any) {
     this.logger.log(
       `Received match.requested event for MatchRequest ID: ${msg.matchRequestId}`,
     );

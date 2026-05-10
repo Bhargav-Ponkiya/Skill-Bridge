@@ -4,10 +4,14 @@ import { Review } from './review.entity';
 import { ReviewService } from './review.service';
 import { ReviewResolver } from './review.resolver';
 import { Session } from '../session/session.entity';
+import { User } from '../user/user.entity';
 import { DataloaderModule } from '../dataloader/dataloader.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Review, Session]), DataloaderModule],
+  imports: [
+    TypeOrmModule.forFeature([Review, Session, User]),
+    DataloaderModule,
+  ],
   providers: [ReviewService, ReviewResolver],
   exports: [ReviewService],
 })

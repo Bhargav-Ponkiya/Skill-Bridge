@@ -81,23 +81,23 @@ export class SessionResolver {
     );
   }
 
-  @ResolveField(() => User)
-  async participant1(@Parent() session: Session): Promise<User> {
+  @ResolveField(() => User, { nullable: true })
+  async participant1(@Parent() session: Session): Promise<User | null> {
     return this.dataloaderService.userLoader.load(session.participant1Id);
   }
 
-  @ResolveField(() => User)
-  async participant2(@Parent() session: Session): Promise<User> {
+  @ResolveField(() => User, { nullable: true })
+  async participant2(@Parent() session: Session): Promise<User | null> {
     return this.dataloaderService.userLoader.load(session.participant2Id);
   }
 
-  @ResolveField(() => Skill)
-  async skill1(@Parent() session: Session): Promise<Skill> {
+  @ResolveField(() => Skill, { nullable: true })
+  async skill1(@Parent() session: Session): Promise<Skill | null> {
     return this.dataloaderService.skillLoader.load(session.skill1Id);
   }
 
-  @ResolveField(() => Skill)
-  async skill2(@Parent() session: Session): Promise<Skill> {
+  @ResolveField(() => Skill, { nullable: true })
+  async skill2(@Parent() session: Session): Promise<Skill | null> {
     return this.dataloaderService.skillLoader.load(session.skill2Id);
   }
 }

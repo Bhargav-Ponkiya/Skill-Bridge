@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_ME, GET_USER_STATS, GET_USER_REVIEWS } from '@/graphql/queries';
 import {
@@ -143,6 +144,21 @@ export default function MyProfilePage() {
     <div className="w-full space-y-8 animate-fade-in">
       {/* Profile header */}
       <header className="surface rounded-2xl border p-6 md:p-8">
+        {/* Guest promotion banner */}
+        {user?.isGuest && (
+          <div className="bg-gradient-to-r from-accent/10 to-brand-700/10 border border-accent/20 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="font-semibold text-fg text-sm">Guest account</p>
+              <p className="text-xs text-muted mt-0.5">
+                Register to keep your skills and portfolio, send match requests, and build your reputation.
+              </p>
+            </div>
+            <Link href="/register" className="btn-primary text-sm shrink-0">
+              Register now
+            </Link>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row gap-6 md:items-center">
           <div className="relative shrink-0">
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent to-brand-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg">

@@ -7,7 +7,6 @@ import {
   Parent,
   Int,
 } from '@nestjs/graphql';
-import { Max, Min } from 'class-validator';
 import { Inject } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 import { Message } from './message.entity';
@@ -30,10 +29,8 @@ export class MessageResolver {
     @CurrentUser() user: any,
     @Args('sessionId') sessionId: string,
     @Args('limit', { type: () => Int, nullable: true })
-    @Max(500)
     limit?: number,
     @Args('offset', { type: () => Int, nullable: true })
-    @Min(0)
     offset?: number,
   ): Promise<Message[]> {
     return this.messageService.getMessagesBySession(

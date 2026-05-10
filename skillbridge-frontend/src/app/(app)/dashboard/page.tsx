@@ -140,6 +140,23 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
+      {/* Guest promotion banner */}
+      {user?.isGuest && (
+        <div className="bg-gradient-to-r from-accent/10 to-brand-700/10 border border-accent/20 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="font-semibold text-fg flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent" /> You're browsing as a guest
+            </p>
+            <p className="text-sm text-muted mt-1">
+              Register now to send match requests, create sessions, and keep your progress forever.
+            </p>
+          </div>
+          <Link href="/register" className="btn-primary shrink-0">
+            Create free account
+          </Link>
+        </div>
+      )}
+
       {/* Hero */}
       <header className="surface rounded-2xl border p-6 md:p-8">
         <div className="flex flex-col lg:flex-row gap-6 lg:items-end justify-between">
@@ -151,9 +168,11 @@ export default function DashboardPage() {
               Welcome back, {user?.name?.split(' ')[0] || 'there'}
             </h1>
             <p className="text-muted max-w-full lg:max-w-2xl">
-              {requests.length > 0
-                ? `You have ${requests.length} new match ${requests.length === 1 ? 'request' : 'requests'} waiting.`
-                : `Browse curated matches below or open Explore to discover more skills.`}
+              {user?.isGuest
+                ? 'Explore how SkillBridge works. Register to unlock all features.'
+                : requests.length > 0
+                  ? `You have ${requests.length} new match ${requests.length === 1 ? 'request' : 'requests'} waiting.`
+                  : 'Browse curated matches below or open Explore to discover more skills.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">

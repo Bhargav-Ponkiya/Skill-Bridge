@@ -1,8 +1,13 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Review } from './review.entity';
 import { CreateReviewInput } from './dto/create-review.input';
+import { User } from '../user/user.entity';
 import { Session, SessionStatus } from '../session/session.entity';
 
 @Injectable()
@@ -12,6 +17,8 @@ export class ReviewService {
     private readonly reviewRepository: Repository<Review>,
     @InjectRepository(Session)
     private readonly sessionRepository: Repository<Session>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -19,6 +26,15 @@ export class ReviewService {
     reviewerId: string,
     input: CreateReviewInput,
   ): Promise<Review> {
+    const reviewer = await this.userRepository.findOne({
+      where: { id: reviewerId },
+      select: ['isGuest'],
+    });
+    if (reviewer?.isGuest) {
+      throw new ForbiddenException(
+        'Guest accounts cannot submit reviews. Please register first.',
+      );
+    }
     const session = await this.sessionRepository.findOne({
       where: { id: input.sessionId },
     });

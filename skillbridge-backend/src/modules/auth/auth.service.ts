@@ -101,8 +101,8 @@ export class AuthService {
     });
     await this.userRepository.save(user);
 
-    const { accessToken } = this.generateTokens(user);
-    return { accessToken, user };
+    const { accessToken, refreshToken } = this.generateTokens(user);
+    return { accessToken, refreshToken, user };
   }
 
   async me(userId: string): Promise<User> {

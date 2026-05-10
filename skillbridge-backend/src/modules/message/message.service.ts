@@ -2,11 +2,13 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { Message } from './message.entity';
 import { CreateMessageInput } from './dto/create-message.input';
+import { User } from '../user/user.entity';
 import { Session } from '../session/session.entity';
 
 @Injectable()
@@ -16,12 +18,23 @@ export class MessageService {
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(Session)
     private readonly sessionRepository: Repository<Session>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async createMessage(
     senderId: string,
     input: CreateMessageInput,
   ): Promise<Message> {
+    const sender = await this.userRepository.findOne({
+      where: { id: senderId },
+      select: ['isGuest'],
+    });
+    if (sender?.isGuest) {
+      throw new BadRequestException(
+        'Guest accounts cannot send messages. Please register first.',
+      );
+    }
     const session = await this.sessionRepository.findOne({
       where: { id: input.sessionId },
     });

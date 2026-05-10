@@ -10,6 +10,7 @@ import { SessionConsumer } from './session.consumer';
 import { SessionGateway } from './session.gateway';
 import { MatchRequest } from '../match/match-request.entity';
 import { Skill } from '../skill/skill.entity';
+import { User } from '../user/user.entity';
 import { DataloaderModule } from '../dataloader/dataloader.module';
 
 import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
@@ -21,7 +22,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    TypeOrmModule.forFeature([Session, MatchRequest, Skill]),
+    TypeOrmModule.forFeature([Session, MatchRequest, Skill, User]),
     DataloaderModule,
     AiModule,
     NotificationModule,

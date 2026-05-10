@@ -23,23 +23,18 @@ const SIZE = {
 export function Modal({ open, onClose, title, description, children, size = 'md' }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current();
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
 
-    const focusableSelector = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const previouslyFocused = document.activeElement as HTMLElement;
+    const focusableSelector = 'textarea:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-    requestAnimationFrame(() => {
-      const container = contentRef.current;
-      if (container) {
-        const firstFocusable = container.querySelector<HTMLElement>(focusableSelector);
-        firstFocusable?.focus();
-      }
-    });
+    const previouslyFocused = document.activeElement as HTMLElement;
 
     const handleTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
@@ -69,7 +64,7 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
       document.body.style.overflow = '';
       previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof window === 'undefined') return null;
 

@@ -3,12 +3,14 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   OnApplicationBootstrap,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository, In } from 'typeorm';
 import { Skill, SkillType } from './skill.entity';
 import { Portfolio } from './portfolio.entity';
+import { User } from '../user/user.entity';
 import { CreateSkillInput } from './dto/create-skill.input';
 import { UpdateSkillInput } from './dto/update-skill.input';
 import { UpdatePortfolioInput } from './dto/update-portfolio.input';
@@ -26,6 +28,8 @@ export class SkillService implements OnApplicationBootstrap {
     private skillRepository: Repository<Skill>,
     @InjectRepository(Portfolio)
     private portfolioRepository: Repository<Portfolio>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private readonly aiService: AiService,
   ) {}
 
@@ -85,7 +89,20 @@ export class SkillService implements OnApplicationBootstrap {
     }
   }
 
+  private async assertNotGuest(userId: string): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['isGuest'],
+    });
+    if (user?.isGuest) {
+      throw new ForbiddenException(
+        'Guest accounts cannot perform this action. Please register first.',
+      );
+    }
+  }
+
   async createSkill(userId: string, input: CreateSkillInput): Promise<Skill> {
+    await this.assertNotGuest(userId);
     const skill = this.skillRepository.create({
       ...input,
       userId,
@@ -99,6 +116,7 @@ export class SkillService implements OnApplicationBootstrap {
     id: string,
     input: UpdateSkillInput,
   ): Promise<Skill> {
+    await this.assertNotGuest(userId);
     const skill = await this.skillRepository.findOne({ where: { id, userId } });
     if (!skill)
       throw new NotFoundException(
@@ -124,6 +142,7 @@ export class SkillService implements OnApplicationBootstrap {
   }
 
   async toggleSkillActive(userId: string, id: string): Promise<Skill> {
+    await this.assertNotGuest(userId);
     const skill = await this.skillRepository.findOne({ where: { id, userId } });
     if (!skill)
       throw new NotFoundException(
@@ -135,6 +154,7 @@ export class SkillService implements OnApplicationBootstrap {
   }
 
   async deleteSkill(userId: string, id: string): Promise<boolean> {
+    await this.assertNotGuest(userId);
     const skill = await this.skillRepository.findOne({ where: { id, userId } });
     if (!skill)
       throw new NotFoundException(
@@ -205,10 +225,6 @@ export class SkillService implements OnApplicationBootstrap {
 
     if (type && (type === SkillType.OFFER || type === SkillType.WANT)) {
       qb.andWhere('skill.type = :type', { type });
-    } else {
-      qb.andWhere('skill.type = :defaultType', {
-        defaultType: SkillType.OFFER,
-      });
     }
 
     // Cursor-based: fetch one extra to determine if there's a next page.
@@ -246,10 +262,6 @@ export class SkillService implements OnApplicationBootstrap {
     }
     if (type && (type === SkillType.OFFER || type === SkillType.WANT)) {
       countQb.andWhere('skill.type = :type', { type });
-    } else {
-      countQb.andWhere('skill.type = :defaultType', {
-        defaultType: SkillType.OFFER,
-      });
     }
 
     const totalCount = await countQb.getCount();
@@ -273,6 +285,7 @@ export class SkillService implements OnApplicationBootstrap {
     userId: string,
     input: AddPortfolioInput,
   ): Promise<Portfolio> {
+    await this.assertNotGuest(userId);
     const skill = await this.skillRepository.findOne({
       where: { id: input.skillId, userId },
     });
@@ -283,6 +296,7 @@ export class SkillService implements OnApplicationBootstrap {
   }
 
   async removePortfolio(userId: string, id: string): Promise<boolean> {
+    await this.assertNotGuest(userId);
     const portfolio = await this.portfolioRepository.findOne({
       where: { id },
       relations: ['skill'],
@@ -301,6 +315,7 @@ export class SkillService implements OnApplicationBootstrap {
     id: string,
     input: UpdatePortfolioInput,
   ): Promise<Portfolio> {
+    await this.assertNotGuest(userId);
     const portfolio = await this.portfolioRepository.findOne({
       where: { id },
       relations: ['skill'],

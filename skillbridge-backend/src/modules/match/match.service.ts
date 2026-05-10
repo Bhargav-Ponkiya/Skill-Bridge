@@ -96,11 +96,25 @@ export class MatchService {
         offeredSkillId: input.offeredSkillId,
         wantedSkillId: input.wantedSkillId,
       },
+      order: { createdAt: 'DESC' },
     });
     if (existing) {
-      throw new BadRequestException(
-        'You already have a request for this exchange.',
-      );
+      if (existing.status === MatchRequestStatus.PENDING) {
+        throw new BadRequestException(
+          'You already have a pending request for this exchange.',
+        );
+      }
+      if (
+        existing.status === MatchRequestStatus.DECLINED &&
+        existing.updatedAt
+      ) {
+        const ageHours = (Date.now() - existing.updatedAt.getTime()) / 3600000;
+        if (ageHours < 168) {
+          throw new BadRequestException(
+            'This user recently declined your request. Please wait before trying again.',
+          );
+        }
+      }
     }
 
     const matchRequest = this.matchRequestRepository.create({
@@ -440,7 +454,9 @@ export class MatchService {
     // Batch reverse score computation: one query per candidate's userId using pgvector.
     // Build a map of userId → best reverse affinity score.
     const reverseScoreMap = new Map<string, number>();
-    const otherUserIds = [...new Set(Array.from(candidates.values()).map((c) => c.offerRow.userId))];
+    const otherUserIds = [
+      ...new Set(Array.from(candidates.values()).map((c) => c.offerRow.userId)),
+    ];
 
     if (otherUserIds.length > 0 && userOffers.length > 0) {
       const userOfferEmbeddings = userOffers.filter((o: any) => o.embedding);
@@ -479,7 +495,8 @@ export class MatchService {
               dist,
               new Set(),
             );
-            if (revAffinity.total > bestReverse) bestReverse = revAffinity.total;
+            if (revAffinity.total > bestReverse)
+              bestReverse = revAffinity.total;
           }
         }
         reverseScoreMap.set(otherUserId, bestReverse);
@@ -502,10 +519,16 @@ export class MatchService {
       const ageHours = offerRow.createdAt
         ? (Date.now() - new Date(offerRow.createdAt).getTime()) / 3600000
         : 9999;
-      const freshnessBoost = Math.max(0, Math.round((1 - Math.min(ageHours, 168) / 168) * 5));
+      const freshnessBoost = Math.max(
+        0,
+        Math.round((1 - Math.min(ageHours, 168) / 168) * 5),
+      );
 
       const total = Math.round(
-        forwardAffinity.total * 0.6 + reverseScore * 0.3 + categoryScore * 0.1 + freshnessBoost,
+        forwardAffinity.total * 0.6 +
+          reverseScore * 0.3 +
+          categoryScore * 0.1 +
+          freshnessBoost,
       );
       const finalScore = Math.max(5, Math.min(99, total));
 
@@ -575,12 +598,17 @@ export class MatchService {
   private async computeExcludedSkillIds(userId: string): Promise<Set<string>> {
     const excluded = new Set<string>();
 
-    // Skills the user has actioned on in ANY request (regardless of status).
+    // Fetch all requests this user participated in, then filter by status.
     const allRequests = await this.matchRequestRepository.find({
       where: [{ fromUserId: userId }, { toUserId: userId }],
-      select: ['wantedSkillId', 'offeredSkillId'],
+      select: ['wantedSkillId', 'offeredSkillId', 'status', 'updatedAt'],
     });
     for (const r of allRequests) {
+      if (r.status === MatchRequestStatus.CANCELLED) continue;
+      if (r.status === MatchRequestStatus.DECLINED && r.updatedAt) {
+        const ageHours = (Date.now() - r.updatedAt.getTime()) / 3600000;
+        if (ageHours > 168) continue; // declined > 7 days — re-appear in recs
+      }
       if (r.wantedSkillId) excluded.add(r.wantedSkillId);
       if (r.offeredSkillId) excluded.add(r.offeredSkillId);
     }

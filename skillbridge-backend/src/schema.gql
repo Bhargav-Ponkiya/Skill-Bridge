@@ -23,6 +23,7 @@ type AffinityBreakdown {
 
 type AuthResponse {
   accessToken: String!
+  refreshToken: String
   user: User!
 }
 
@@ -141,6 +142,7 @@ type Mutation {
   logout: Boolean!
   markNotificationRead(id: String!): Notification!
   markSessionRead(sessionId: String!): Int!
+  refreshToken(token: String!): AuthResponse!
   register(input: RegisterInput!): AuthResponse!
   removePortfolio(id: String!): Boolean!
   respondToMatchRequest(accept: Boolean!, requestId: String!): MatchRequest!
@@ -217,7 +219,7 @@ enum ProficiencyLevel {
 
 type Query {
   me: User!
-  messages(sessionId: String!): [Message!]!
+  messages(limit: Int, offset: Int, sessionId: String!): [Message!]!
   myMatchRequests(pagination: PaginationInput, type: String!): PaginatedMatchRequests!
   myNotifications: [Notification!]!
   mySessions: [Session!]!
@@ -403,7 +405,6 @@ type TypingEvent {
 
 input UpdatePortfolioInput {
   description: String
-  id: ID!
   skillId: String
   title: String
   type: String = "other"
@@ -445,6 +446,7 @@ type User {
   isVerified: Boolean!
   name: String!
   reviewCount: Int!
+  role: String!
   skills: [Skill]
   timezone: String
   trustScore: Float!

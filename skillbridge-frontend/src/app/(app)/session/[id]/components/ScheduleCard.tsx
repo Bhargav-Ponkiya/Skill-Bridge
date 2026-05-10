@@ -26,7 +26,7 @@ export function ScheduleCard({
   skill1Title?: string;
   skill2Title?: string;
 }) {
-  const sessionActive = ['ACTIVE', 'COMPLETED', 'REVIEWED'].includes(session.status);
+  const sessionActive = ['ACTIVE', 'COMPLETED', 'REVIEWED', 'CANCELLED'].includes(session.status);
   const [scheduledAt, setScheduledAt] = useState<string>(
     session.scheduledAt ? toLocalInput(session.scheduledAt) : '',
   );

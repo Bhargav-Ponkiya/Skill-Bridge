@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Pencil, Trash2, Eye, EyeOff, Award, LinkIcon, Star, Sparkles, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Eye, EyeOff, Award, LinkIcon, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface SkillCardSkill {
@@ -169,7 +168,6 @@ export function SkillCard({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <SkillReviewDigest skillId={skill.id} skillTitle={skill.title} userId={skill.user.id} />
             {onConnect && (
               <button
                 type="button"
@@ -184,117 +182,8 @@ export function SkillCard({
       )}
 
       {footer && <div className="pt-3 border-t border-border mt-3">{footer}</div>}
-
-      <SkillReviewDigestInline
-        skillId={skill.id}
-        skillTitle={skill.title}
-        userId={skill.user?.id}
-        show={variant === 'public'}
-      />
     </div>
   );
 }
 
-function SkillReviewDigest({
-  skillId,
-  skillTitle,
-  userId,
-}: {
-  skillId: string;
-  skillTitle: string;
-  userId: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="text-xs font-medium text-muted hover:text-accent transition-colors flex items-center gap-1"
-      >
-        <Sparkles className="w-3 h-3" /> {open ? 'Hide' : 'Reviews'}
-      </button>
-      {open && <SkillReviewDigestInline skillId={skillId} skillTitle={skillTitle} userId={userId} show />}
-    </>
-  );
-}
 
-function SkillReviewDigestInline({
-  skillId,
-  skillTitle,
-  userId,
-  show,
-}: {
-  skillId: string;
-  skillTitle: string;
-  userId?: string;
-  show: boolean;
-}) {
-  const [digest, setDigest] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [opened, setOpened] = useState(false);
-  const esRef = useRef<EventSource | null>(null);
-
-  if (!show || !userId) return null;
-
-  const handleGenerate = () => {
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-
-    setLoading(true);
-    setDigest('');
-    setOpened(true);
-    const backendUrl =
-      process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT?.replace('/graphql', '') || 'http://localhost:3001';
-    const url = `${backendUrl}/ai/user/${userId}/skill/${skillId}/reviews/summary/stream?title=${encodeURIComponent(skillTitle)}`;
-
-    try {
-      esRef.current = new EventSource(url);
-    } catch {
-      setLoading(false);
-      return;
-    }
-
-    esRef.current.onmessage = (event) => {
-      if (event.data === '[DONE]') {
-        esRef.current?.close();
-        esRef.current = null;
-        setLoading(false);
-        return;
-      }
-      setDigest((prev) => prev + event.data);
-    };
-    esRef.current.onerror = () => {
-      if (!esRef.current) return;
-      if (esRef.current.readyState === 0) return;
-      esRef.current.close();
-      esRef.current = null;
-      setLoading(false);
-    };
-  };
-
-  return (
-    <div className="pt-3 border-t border-border mt-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">
-          Reviews for {skillTitle}
-        </p>
-        <button
-          onClick={handleGenerate}
-          disabled={loading}
-          className="text-xs font-medium text-accent hover:underline flex items-center gap-1"
-        >
-          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-          {loading ? 'Generating' : opened ? 'Regenerate' : 'AI Summary'}
-        </button>
-      </div>
-      {opened && (
-        <div className="rounded-lg bg-surface-2 border border-border p-3 text-xs text-fg-soft whitespace-pre-wrap leading-relaxed min-h-[40px]">
-          {digest || (loading ? 'Reading reviews…' : '')}
-        </div>
-      )}
-    </div>
-  );
-}
