@@ -75,8 +75,8 @@ export class Skill {
   @Column({ default: 0 })
   swappedCount: number;
 
-  // Uses pgvector type.
-  @Column({ type: 'vector', length: 768, nullable: true })
+  // Uses pgvector type. gemini-embedding-001 outputs 3072-dimensional vectors.
+  @Column({ type: 'vector', length: 3072, nullable: true })
   embedding?: string; // TypeORM maps vector to string natively if you don't parse it
 
   @Field()

@@ -218,7 +218,7 @@ function hrefFor(n: any): string {
   switch (n.type) {
     case 'MATCH_REQUEST':
     case 'MATCH_ACCEPTED':
-      return '/matches';
+      return n.relatedId ? `/session/${n.relatedId}` : '/matches';
     case 'SESSION_REMINDER':
     case 'SESSION_COMPLETED':
     case 'NEW_MESSAGE':

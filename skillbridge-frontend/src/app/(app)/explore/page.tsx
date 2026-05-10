@@ -36,6 +36,12 @@ export default function ExplorePage() {
     notifyOnNetworkStatusChange: true,
   });
 
+  useEffect(() => {
+    if (searchError) {
+      toast.error(`Search failed: ${searchError.message}`);
+    }
+  }, [searchError]);
+
   const myOfferSkills = useMemo(
     () => (meData?.me?.skills ?? []).filter((s: any) => s.type === 'OFFER' && s.isActive !== false),
     [meData],

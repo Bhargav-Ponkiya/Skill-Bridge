@@ -230,35 +230,6 @@ export function SummaryPanel({
         )}
       </div>
 
-      {/* Mini review feed for partner */}
-      {reviews.length > 0 && (
-        <div className="surface border rounded-2xl p-5">
-          <h3 className="font-semibold text-fg mb-3 text-sm">
-            What others said about {partnerName?.split(' ')[0] ?? 'them'}
-          </h3>
-          <ul className="space-y-3 text-sm">
-            {reviews.slice(0, 3).map((r: any) => (
-              <li key={r.id}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold text-fg">{r.reviewer?.name}</span>
-                  <span className="flex items-center gap-0.5 text-warning">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className={cn(
-                          'w-3 h-3',
-                          i < r.rating ? 'fill-warning' : 'text-muted-2',
-                        )}
-                      />
-                    ))}
-                  </span>
-                </div>
-                {r.comment && <p className="text-muted text-xs leading-relaxed">"{r.comment}"</p>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }

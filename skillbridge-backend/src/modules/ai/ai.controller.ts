@@ -33,6 +33,7 @@ export class AiController {
     private readonly sessionRepository: Repository<Session>,
   ) {}
 
+  @Public()
   @Sse('session/:id/summary/stream')
   streamSummary(
     @Param('id') sessionId: string,
@@ -95,6 +96,7 @@ export class AiController {
     });
   }
 
+  @Public()
   @Sse('agenda')
   streamAgenda(
     @Query('offered') offeredTitle: string,
@@ -230,6 +232,7 @@ export class AiController {
       .join('\n');
   }
 
+  @Public()
   @Sse('session/:id/takeaways/stream')
   streamTakeaways(
     @Param('id') sessionId: string,

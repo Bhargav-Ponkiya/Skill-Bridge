@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_MY_SESSIONS } from '@/graphql/queries';
@@ -60,6 +61,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function SessionsPage() {
+  const router = useRouter();
   const { data, loading, error, refetch } = useQuery<any>(GET_MY_SESSIONS, {
     fetchPolicy: 'cache-and-network',
   });
@@ -170,7 +172,14 @@ export default function SessionsPage() {
             <SessionCard
               key={session.id}
               session={session}
-              onAdvance={() => changeStatus({ variables: { id: session.id, status: getNextStatus(session.status) } })}
+              onAdvance={() => {
+                if (session.status === 'NEGOTIATING') {
+                  // Redirect to session page to set logistics instead of advancing status
+                  router.push(`/session/${session.id}`);
+                } else {
+                  changeStatus({ variables: { id: session.id, status: getNextStatus(session.status) } });
+                }
+              }}
               onCancel={() => setCancelTarget(session)}
               changingStatus={changingStatus}
               cancelling={cancelling}

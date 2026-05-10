@@ -19,6 +19,7 @@ import { Repository } from 'typeorm';
 
 import { PaginatedSkills } from './dto/paginated-skills.output';
 import { CursorPaginationInput } from '../../common/dto/cursor-pagination.input';
+import { Public } from '../../common/decorators/public.decorator';
 import { AddPortfolioInput } from './dto/add-portfolio.input';
 import { UpdatePortfolioInput } from './dto/update-portfolio.input';
 
@@ -31,6 +32,7 @@ export class SkillResolver {
     private readonly portfolioRepository: Repository<Portfolio>,
   ) {}
 
+  @Public()
   @Query(() => PaginatedSkills, {
     description:
       'Search active skills offered by other users (excludes the current user).',
@@ -43,7 +45,7 @@ export class SkillResolver {
     @Args('pagination', { nullable: true }) pagination?: CursorPaginationInput,
   ): Promise<PaginatedSkills> {
     return this.skillService.searchSkills(
-      user.id || user.sub,
+      user?.id || user?.sub || null,
       query,
       category,
       type,

@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 import { useMutation } from '@apollo/client/react';
-import { CHANGE_SESSION_STATUS, TOGGLE_SESSION_PROGRESS, CANCEL_SESSION } from '@/graphql/mutations';
+import { CHANGE_SESSION_STATUS, TOGGLE_SESSION_PROGRESS, CANCEL_SESSION, SEND_MESSAGE } from '@/graphql/mutations';
 import { toast } from 'sonner';
 import { Modal } from '@/components/Modal';
-import { Loader2, Play, CheckCircle2, Sparkles, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Loader2, Play, CheckCircle2, Sparkles, AlertTriangle, ShieldCheck, MessageSquare as Chat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function ActionRow({
@@ -33,6 +33,14 @@ export function ActionRow({
       setCancelReason('');
       onRefetch();
       toast.success('Session cancelled.');
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const [sendMessage, { loading: sendingAgenda }] = useMutation(SEND_MESSAGE, {
+    onCompleted: () => {
+      toast.success('Agenda shared to chat!');
+      setShowAgendaModal(false);
+      setAgendaContent('');
     },
     onError: (err) => toast.error(err.message),
   });
@@ -106,6 +114,18 @@ export function ActionRow({
     });
   };
 
+  const handleShareAgenda = () => {
+    if (!agendaContent) return;
+    sendMessage({
+      variables: {
+        input: {
+          sessionId: session.id,
+          content: `📝 **AI Session Agenda**\n\n${agendaContent}`,
+        },
+      },
+    });
+  };
+
   return (
     <>
     <div className="surface border rounded-2xl p-5 flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
@@ -119,7 +139,7 @@ export function ActionRow({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        {(session.status === 'NEGOTIATING' || session.status === 'SCHEDULED') && (
+        {session.status === 'SCHEDULED' && (
           <button
             onClick={() => changeStatus({
               variables: { id: session.id, status: 'ACTIVE' },
@@ -242,16 +262,27 @@ export function ActionRow({
             Close
           </button>
           {agendaContent && !agendaLoading && (
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(agendaContent);
-                toast.success('Agenda copied to clipboard!');
-              }}
-              className="btn-primary flex items-center gap-1.5"
-            >
-              Copy to Clipboard
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleShareAgenda}
+                disabled={sendingAgenda}
+                className="btn-secondary flex items-center gap-1.5 text-accent border-accent/30"
+              >
+                {sendingAgenda ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Chat className="w-3.5 h-3.5" />}
+                Share to Chat
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(agendaContent);
+                  toast.success('Agenda copied to clipboard!');
+                }}
+                className="btn-primary flex items-center gap-1.5"
+              >
+                Copy to Clipboard
+              </button>
+            </div>
           )}
         </div>
       </div>

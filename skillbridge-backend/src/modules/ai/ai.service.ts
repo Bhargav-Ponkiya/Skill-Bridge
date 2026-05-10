@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const EMBED_MODEL = 'text-embedding-004';
+const EMBED_MODEL = 'gemini-embedding-001';
 // On a 429 we stop hitting the API for this long. Avoids burning the rest of the daily
 // quota retrying when the key has `limit: 0` for everything we listed.
 const QUOTA_COOLDOWN_MS = 10 * 60 * 1000;
@@ -56,7 +56,11 @@ export class AiService {
       process.env.GEMINI_API_KEY;
     if (!apiKey) return this.fallbackEmbedding();
 
-    const models = ['text-embedding-004', 'embedding-001'];
+    // Embedding models are only available under the v1beta endpoint (not v1).
+    // gemini-embedding-001 is the stable replacement for the retired text-embedding-004.
+    // gemini-embedding-2 is the newest available model (also on v1beta).
+    // Both output 3072-dimensional vectors.
+    const models = ['gemini-embedding-001', 'gemini-embedding-2'];
     for (const modelName of models) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:embedContent?key=${apiKey}`;
@@ -92,7 +96,8 @@ export class AiService {
   }
 
   private fallbackEmbedding(): number[] {
-    return Array.from({ length: 768 }, () => Math.random() * 2 - 1);
+    // Must match the vector(3072) column dimension used by gemini-embedding-001.
+    return Array.from({ length: 3072 }, () => Math.random() * 2 - 1);
   }
 
   async *streamSessionSummary(

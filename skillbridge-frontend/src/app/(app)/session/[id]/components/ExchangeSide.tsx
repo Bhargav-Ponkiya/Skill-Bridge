@@ -1,7 +1,8 @@
-import { useMutation } from '@apollo/client/react';
+import { useMutation, useQuery } from '@apollo/client/react';
 import { TOGGLE_SESSION_PROGRESS } from '@/graphql/mutations';
+import { SKILL_REVIEWS } from '@/graphql/queries';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle2, Clock, Link as LinkIcon } from 'lucide-react';
+import { Loader2, CheckCircle2, Clock, Link as LinkIcon, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function ExchangeSide({
@@ -29,6 +30,16 @@ export function ExchangeSide({
     onCompleted: () => onToggled?.(),
     onError: (err) => toast.error(err.message),
   });
+
+  const { data: skillReviewsData } = useQuery(SKILL_REVIEWS, {
+    variables: { userId: person?.id ?? '', skillId: skill?.id ?? '' },
+    skip: !person?.id || !skill?.id || isMine,
+  });
+
+  const reviews = skillReviewsData?.skillReviews ?? [];
+  const avgRating = reviews.length > 0 
+    ? reviews.reduce((acc: number, r: any) => acc + r.rating, 0) / reviews.length 
+    : 0;
 
   return (
     <div
@@ -72,6 +83,28 @@ export function ExchangeSide({
           ))}
         </div>
       )}
+
+      {/* Per-skill Reputation */}
+      {!isMine && reviews.length > 0 && (
+        <div className="mb-4 p-3 rounded-xl bg-surface-2 border border-border/50">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Skill Reputation</p>
+            <div className="flex items-center gap-1 text-warning text-xs font-bold">
+              <Star className="w-3 h-3 fill-warning" /> {avgRating.toFixed(1)}
+              <span className="text-muted font-normal">({reviews.length})</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {reviews.slice(0, 2).map((r: any) => (
+              <div key={r.id} className="text-[11px] leading-snug">
+                <p className="text-fg-soft line-clamp-2 italic text-muted">"{r.comment}"</p>
+                <p className="text-[9px] text-muted-2 mt-0.5">— {r.reviewer?.name}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between pt-3 border-t border-border">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-7 h-7 rounded-full bg-gradient-to-br from-accent to-brand-700 flex items-center justify-center text-white text-xs font-semibold shrink-0">
