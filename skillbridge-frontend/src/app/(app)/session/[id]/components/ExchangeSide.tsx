@@ -31,7 +31,7 @@ export function ExchangeSide({
     onError: (err) => toast.error(err.message),
   });
 
-  const { data: skillReviewsData } = useQuery(SKILL_REVIEWS, {
+  const { data: skillReviewsData } = useQuery<any>(SKILL_REVIEWS, {
     variables: { userId: person?.id ?? '', skillId: skill?.id ?? '' },
     skip: !person?.id || !skill?.id || isMine,
   });

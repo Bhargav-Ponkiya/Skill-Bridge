@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: skillbridge-api
+    runtime: docker
+    plan: free
+    region: singapore
+    buildCommand: null # Docker handles build
+    startCommand: null # Docker handles start
+    releaseCommand: npm run db:migrate:prod
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: RABBITMQ_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: JWT_ACCESS_EXPIRY
+        value: 59m
+      - key: JWT_REFRESH_EXPIRY
+        value: 7d
+      - key: GEMINI_SUMMARY_MODELS
+        value: gemini-2.0-flash-lite,gemini-flash-latest,gemini-2.0-flash

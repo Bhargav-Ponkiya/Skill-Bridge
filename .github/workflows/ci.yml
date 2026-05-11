@@ -1,0 +1,68 @@
+name: SkillBridge CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: skillbridge-backend
+    outputs:
+      changed: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'skillbridge-backend/**'
+      - name: Use Node.js
+        if: steps.filter.outputs.backend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: skillbridge-backend/package-lock.json
+      - if: steps.filter.outputs.backend == 'true'
+        run: npm ci
+      - if: steps.filter.outputs.backend == 'true'
+        run: npm run lint
+      - if: steps.filter.outputs.backend == 'true'
+        run: npm run build
+
+  frontend:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: skillbridge-frontend
+    outputs:
+      changed: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'skillbridge-frontend/**'
+      - name: Use Node.js
+        if: steps.filter.outputs.frontend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: skillbridge-frontend/package-lock.json
+      - if: steps.filter.outputs.frontend == 'true'
+        run: npm ci
+      - if: steps.filter.outputs.frontend == 'true'
+        run: npm run lint
+      - if: steps.filter.outputs.frontend == 'true'
+        run: npm run build
