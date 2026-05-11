@@ -36,10 +36,25 @@ async function bootstrap() {
 
   // ── CORS ──
   app.enableCors({
-    origin: [frontendUrl, 'http://localhost:3000'],
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow local development
+      if (!origin || origin.includes('localhost')) {
+        return callback(null, true);
+      }
+      // Allow the configured frontend URL
+      if (origin === frontendUrl) {
+        return callback(null, true);
+      }
+      // Allow any Vercel deployment for this user
+      if (origin.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+      
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'apollo-require-preflight'],
   });
 
   // ── Global Validation Pipe ──
