@@ -4,9 +4,8 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    buildCommand: null # Docker handles build
-    startCommand: null # Docker handles start
-    releaseCommand: npm run db:migrate:prod
+    buildCommand: null
+    startCommand: npm run db:migrate:prod && node dist/main
     healthCheckPath: /health
     envVars:
       - key: PORT
