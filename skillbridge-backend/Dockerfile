@@ -33,4 +33,4 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-CMD ["node", "dist/main"]
+CMD ["sh", "-c", "npm run db:migrate:prod && node dist/main"]
