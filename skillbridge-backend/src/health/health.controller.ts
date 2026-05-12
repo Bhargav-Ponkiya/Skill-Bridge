@@ -1,9 +1,18 @@
 import { Controller, Get } from '@nestjs/common';
 import { Public } from '../common/decorators/public.decorator';
 
-@Controller('health')
+@Controller()
 export class HealthController {
   @Get()
+  @Public()
+  root() {
+    return {
+      message: 'SkillBridge API is running',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get('health')
   @Public()
   check() {
     return {
