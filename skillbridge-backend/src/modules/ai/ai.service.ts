@@ -37,10 +37,10 @@ export class AiService {
     this.summaryModels = configuredModels.length
       ? configuredModels
       : [
-          'gemini-2.0-flash-lite',
-          'gemini-flash-latest',
+          'gemini-3.1-flash-lite',
           'gemini-2.5-flash',
-          'gemini-2.0-flash',
+          'gemini-1.5-flash',
+          'gemini-1.5-flash-8b',
         ];
     this.logger.log(
       `Gemini summary fallback chain: ${this.summaryModels.join(' → ')}`,
@@ -60,7 +60,7 @@ export class AiService {
     // gemini-embedding-001 is the stable replacement for the retired text-embedding-004.
     // gemini-embedding-2 is the newest available model (also on v1beta).
     // Both output 3072-dimensional vectors.
-    const models = ['gemini-embedding-001', 'gemini-embedding-2'];
+    const models = ['gemini-embedding-2', 'gemini-embedding-001'];
     for (const modelName of models) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:embedContent?key=${apiKey}`;
@@ -229,26 +229,14 @@ export class AiService {
           continue;
         }
         this.logger.error(`AI stream failed on ${modelName}`, err);
-        const errMessage = (err as Error).message || '';
-        const isTransient =
-          errMessage.includes('503') ||
-          errMessage.includes('502') ||
-          errMessage.includes('504');
-
-        if (isTransient) {
-          this.logger.warn(
-            `Transient error on ${modelName}; trying next model.`,
-          );
-          continue;
-        }
-
-        yield 'An error occurred while generating the summary.';
-        return;
+        // On any non-transient, non-quota error, we still try the next model in the chain
+        // before giving up entirely.
+        continue;
       }
     }
 
     yield lastQuotaError
-      ? "Today's AI quota is fully used across all configured Gemini models. Try again later, or set GEMINI_SUMMARY_MODELS in .env to point at a model your key can use."
+      ? "Today's AI quota is fully used across all configured Gemini models. Try again later."
       : 'AI summary is temporarily unavailable.';
   }
 
