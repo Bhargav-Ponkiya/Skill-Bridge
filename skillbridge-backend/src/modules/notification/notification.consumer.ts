@@ -14,7 +14,13 @@ export class NotificationConsumer {
     routingKey: 'notification.send',
     queue: 'notification-email-queue',
   })
-  public async handleSendNotification(msg: any) {
+  public async handleSendNotification(msg: {
+    userId: string;
+    type?: NotificationType;
+    title: string;
+    message: string;
+    relatedId?: string;
+  }) {
     this.logger.log(
       `Received notification request for user ${msg.userId}: ${msg.title}`,
     );

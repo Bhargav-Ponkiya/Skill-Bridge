@@ -38,7 +38,7 @@ export class SkillResolver {
       'Search active skills offered by other users (excludes the current user).',
   })
   async searchSkills(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string } | null,
     @Args('query', { nullable: true }) query?: string,
     @Args('category', { nullable: true }) category?: string,
     @Args('type', { nullable: true }) type?: string,
@@ -54,66 +54,68 @@ export class SkillResolver {
   }
 
   @Query(() => [Skill])
-  async mySkills(@CurrentUser() user: any): Promise<Skill[]> {
-    return this.skillService.mySkills(user.id || user.sub);
+  async mySkills(
+    @CurrentUser() user: { id: string; sub?: string },
+  ): Promise<Skill[]> {
+    return this.skillService.mySkills((user.id || user.sub)!);
   }
 
   @Mutation(() => Skill)
   async addSkill(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string } | null,
     @Args('input') input: CreateSkillInput,
   ): Promise<Skill> {
-    return this.skillService.createSkill(user.id || user.sub, input);
+    return this.skillService.createSkill((user?.id || user?.sub)!, input);
   }
 
   @Mutation(() => Skill)
   async updateSkill(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string } | null,
     @Args('id') id: string,
     @Args('input') input: UpdateSkillInput,
   ): Promise<Skill> {
-    return this.skillService.updateSkill(user.id || user.sub, id, input);
+    return this.skillService.updateSkill((user?.id || user?.sub)!, id, input);
   }
 
   @Mutation(() => Skill)
   async toggleSkillActive(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string } | null,
     @Args('id') id: string,
   ): Promise<Skill> {
-    return this.skillService.toggleSkillActive(user.id || user.sub, id);
+    return this.skillService.toggleSkillActive((user?.id || user?.sub)!, id);
   }
 
   @Mutation(() => Boolean)
   async deleteSkill(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string } | null,
     @Args('id') id: string,
   ): Promise<boolean> {
-    return this.skillService.deleteSkill(user.id || user.sub, id);
+    return this.skillService.deleteSkill((user?.id || user?.sub)!, id);
   }
 
   @Mutation(() => Portfolio)
   async addPortfolio(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string } | null,
     @Args('input') input: AddPortfolioInput,
   ): Promise<Portfolio> {
-    return this.skillService.addPortfolio(user.id || user.sub, input);
+    return this.skillService.addPortfolio((user?.id || user?.sub)!, input);
   }
 
   @Mutation(() => Boolean)
   async removePortfolio(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string } | null,
     @Args('id') id: string,
   ): Promise<boolean> {
-    return this.skillService.removePortfolio(user.id || user.sub, id);
+    return this.skillService.removePortfolio((user?.id || user?.sub)!, id);
   }
 
   @Mutation(() => Portfolio)
   async updatePortfolio(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string } | null,
     @Args('id') id: string,
     @Args('input') input: UpdatePortfolioInput,
   ): Promise<Portfolio> {
-    return this.skillService.updatePortfolio(user.id || user.sub, id, input);
+    return this.skillService.updatePortfolio((user?.id || user?.sub)!, id, input);
   }
 
   @ResolveField(() => User, { nullable: true })

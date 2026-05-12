@@ -9,7 +9,6 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
-  Unique,
   VersionColumn,
 } from 'typeorm';
 import { MatchRequest } from '../match/match-request.entity';

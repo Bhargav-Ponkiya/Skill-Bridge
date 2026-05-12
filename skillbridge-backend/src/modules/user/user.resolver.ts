@@ -32,8 +32,8 @@ export class UserResolver {
   ) {}
 
   @Query(() => User)
-  async me(@CurrentUser() user: any): Promise<User> {
-    return this.userService.findById(user.id || user.sub);
+  async me(@CurrentUser() user: { id: string; sub?: string }): Promise<User> {
+    return this.userService.findById((user.id || user.sub)!);
   }
 
   @Public()
@@ -55,28 +55,30 @@ export class UserResolver {
 
   @Mutation(() => User)
   async updateProfile(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('input') input: UpdateProfileInput,
   ): Promise<User> {
-    return this.userService.updateProfile(user.id || user.sub, input);
+    return this.userService.updateProfile((user.id || user.sub)!, input);
   }
 
   @Mutation(() => [AvailabilitySlot])
   async setAvailability(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args({ name: 'slots', type: () => [AvailabilitySlotInput] })
     slots: AvailabilitySlotInput[],
   ): Promise<AvailabilitySlot[]> {
-    return this.userService.setAvailability(user.id || user.sub, slots);
+    return this.userService.setAvailability((user.id || user.sub)!, slots);
   }
 
   /**
    * The owner sees all their skills (active + inactive). Anyone else only sees active skills.
    */
   @ResolveField(() => [Skill])
-  async skills(@Parent() user: User, @Context() ctx: any): Promise<Skill[]> {
-    const requesterId: string | undefined =
-      ctx?.req?.user?.id || ctx?.req?.user?.sub;
+  async skills(
+    @Parent() user: User,
+    @Context() ctx: { req?: { user?: { id?: string; sub?: string } } },
+  ): Promise<Skill[]> {
+    const requesterId = ctx?.req?.user?.id || ctx?.req?.user?.sub;
     const all = await this.skillService.findSkillsByUserId(user.id);
     if (requesterId && requesterId === user.id) return all;
     return all.filter((s) => s.isActive);

@@ -1,4 +1,4 @@
-import { Resolver, Subscription, Args } from '@nestjs/graphql';
+import { Resolver, Subscription } from '@nestjs/graphql';
 import { Inject } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 import { Session } from './session.entity';
@@ -10,10 +10,12 @@ export class SessionSubscriptionResolver {
 
   @Public()
   @Subscription(() => Session, {
-    filter: (payload: any, variables: any) =>
-      payload.sessionUpdated.id === variables.sessionId,
+    filter: (
+      payload: { sessionUpdated: Session },
+      variables: { sessionId: string },
+    ) => payload.sessionUpdated.id === variables.sessionId,
   })
-  sessionUpdated(@Args('sessionId') _sessionId: string) {
+  sessionUpdated() {
     return this.pubSub.asyncIterableIterator('sessionUpdated');
   }
 }

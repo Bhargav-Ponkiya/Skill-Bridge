@@ -20,12 +20,22 @@ export class RateLimitGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (context.getType() === 'rpc') return true;
 
-    let req;
+    interface RateLimitRequest {
+      ip?: string;
+      headers?: Record<string, string | string[] | undefined>;
+      socket?: { remoteAddress?: string };
+      connection?: { remoteAddress?: string };
+      user?: { id?: string; sub?: string };
+      req?: RateLimitRequest;
+    }
+
+    let req: RateLimitRequest | undefined;
     if (context.getType().toString() === 'graphql') {
-      const gqlCtx = GqlExecutionContext.create(context).getContext();
-      req = gqlCtx.req || gqlCtx; // Some setups put req directly in context, some nest it
+      const rawCtx: unknown = GqlExecutionContext.create(context).getContext();
+      const gqlCtx = rawCtx as RateLimitRequest;
+      req = gqlCtx.req || gqlCtx;
     } else {
-      req = context.switchToHttp().getRequest();
+      req = context.switchToHttp().getRequest<RateLimitRequest>();
     }
 
     if (!req) {
@@ -33,16 +43,16 @@ export class RateLimitGuard implements CanActivate {
       return true;
     }
 
-    // In Express, req.ip or req.connection.remoteAddress exists
     const ip =
       req.ip ||
-      req.headers?.['x-forwarded-for'] ||
+      (Array.isArray(req.headers?.['x-forwarded-for'])
+        ? req.headers?.['x-forwarded-for'][0]
+        : req.headers?.['x-forwarded-for']) ||
       req.socket?.remoteAddress ||
       req.connection?.remoteAddress ||
       'unknown';
 
-    // Extract userId if logged in, otherwise default to IP
-    let identifier = ip;
+    let identifier: string = ip;
     if (req.user?.id) {
       identifier = req.user.id;
     } else if (req.user?.sub) {

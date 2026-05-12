@@ -12,6 +12,10 @@ import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as cookie from 'cookie';
 
+interface AuthenticatedSocket extends Socket {
+  userId?: string;
+}
+
 @WebSocketGateway({
   namespace: '/session',
   cors: {
@@ -30,7 +34,7 @@ export class SessionGateway
 
   constructor(private readonly jwtService: JwtService) {}
 
-  async handleConnection(client: Socket) {
+  async handleConnection(client: AuthenticatedSocket) {
     try {
       const cookieHeader = client.handshake.headers.cookie;
       const cookies = cookieHeader ? cookie.parse(cookieHeader) : {};
@@ -42,7 +46,9 @@ export class SessionGateway
         return;
       }
 
-      const payload = await this.jwtService.verifyAsync(accessToken);
+      const rawPayload: unknown =
+        await this.jwtService.verifyAsync(accessToken);
+      const payload = rawPayload as { sub?: string };
       const userId = payload.sub;
 
       if (!userId) {
@@ -51,7 +57,7 @@ export class SessionGateway
         return;
       }
 
-      (client as any).userId = userId;
+      client.userId = userId;
 
       const sockets = this.connectedUsers.get(userId) || [];
       sockets.push(client.id);
@@ -64,8 +70,8 @@ export class SessionGateway
     }
   }
 
-  handleDisconnect(client: Socket) {
-    const userId = (client as any).userId as string | undefined;
+  handleDisconnect(client: AuthenticatedSocket) {
+    const userId = client.userId;
     if (userId) {
       const sockets = this.connectedUsers.get(userId) || [];
       const updated = sockets.filter((id) => id !== client.id);
@@ -81,10 +87,10 @@ export class SessionGateway
 
   @SubscribeMessage('joinSession')
   handleJoinSession(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: { sessionId: string },
   ) {
-    client.join(payload.sessionId);
+    void client.join(payload.sessionId);
     this.logger.log(`Client ${client.id} joined session ${payload.sessionId}`);
 
     this.server.to(payload.sessionId).emit('sessionUpdated', {
@@ -95,10 +101,11 @@ export class SessionGateway
 
   @SubscribeMessage('sendMessage')
   handleSendMessage(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: { sessionId: string; content: string },
   ) {
-    const userId = (client as any).userId as string;
+    const userId = client.userId;
+    if (!userId) return;
     // NOTE: This is a lightweight real-time relay only. Messages are NOT persisted here.
     // The canonical persistence path is the GraphQL sendMessage mutation. Clients should
     // use the mutation for reliable delivery and use this socket channel for optimistic UI.
@@ -112,10 +119,11 @@ export class SessionGateway
 
   @SubscribeMessage('typing:start')
   handleTypingStart(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: { sessionId: string },
   ) {
-    const userId = (client as any).userId as string;
+    const userId = client.userId;
+    if (!userId) return;
     client
       .to(payload.sessionId)
       .emit('typing:start', { userId, sessionId: payload.sessionId });
@@ -123,10 +131,11 @@ export class SessionGateway
 
   @SubscribeMessage('typing:stop')
   handleTypingStop(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: { sessionId: string },
   ) {
-    const userId = (client as any).userId as string;
+    const userId = client.userId;
+    if (!userId) return;
     client
       .to(payload.sessionId)
       .emit('typing:stop', { userId, sessionId: payload.sessionId });

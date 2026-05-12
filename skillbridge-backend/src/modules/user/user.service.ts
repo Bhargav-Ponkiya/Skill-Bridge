@@ -161,13 +161,16 @@ export class UserService {
     const endorsementCount = parseInt(totalEndorsements?.total || '0', 10) || 0;
 
     // Trust score: blend of review quality, completed sessions, portfolio richness, and skill endorsements.
-    const reviewSignal =
-      Math.min(35, reviewCount * 4) * (averageRating / 5 || 0.5);
+    const averageRatingFactor = averageRating / 5 || 0.5;
+    const reviewSignal = Math.min(35, reviewCount * 4) * averageRatingFactor;
     const sessionSignal = Math.min(25, completedSessions * 5);
     const portfolioSignal = Math.min(20, portfolios * 6);
     const endorsementSignal = Math.min(20, endorsementCount * 10);
     const trustScore = Math.round(
-      reviewSignal + sessionSignal + portfolioSignal + endorsementSignal,
+      (reviewSignal || 0) +
+        (sessionSignal || 0) +
+        (portfolioSignal || 0) +
+        (endorsementSignal || 0),
     );
 
     return {

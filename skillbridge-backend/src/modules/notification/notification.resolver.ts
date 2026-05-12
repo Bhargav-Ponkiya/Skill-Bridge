@@ -13,20 +13,25 @@ export class NotificationResolver {
   ) {}
 
   @Query(() => [Notification])
-  async myNotifications(@CurrentUser() user: any): Promise<Notification[]> {
-    return this.notificationService.findMyNotifications(user.id || user.sub);
+  async myNotifications(
+    @CurrentUser() user: { id?: string; sub?: string },
+  ): Promise<Notification[]> {
+    return this.notificationService.findMyNotifications((user.id || user.sub)!);
   }
 
   @Mutation(() => Notification)
   async markNotificationRead(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id?: string; sub?: string },
     @Args('id') id: string,
   ): Promise<Notification> {
-    return this.notificationService.markAsRead(id, user.id || user.sub);
+    return this.notificationService.markAsRead(id, (user.id || user.sub)!);
   }
 
   @Subscription(() => Notification, {
-    filter: (payload, variables) => {
+    filter: (
+      payload: { onNotification: Notification },
+      variables: { userId: string },
+    ) => {
       // payload data structure from PubSub publish: payload.onNotification
       return payload.onNotification.userId === variables.userId;
     },

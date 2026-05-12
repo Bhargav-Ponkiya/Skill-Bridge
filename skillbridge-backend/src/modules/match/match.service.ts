@@ -14,7 +14,7 @@ import { MatchRequest, MatchRequestStatus } from './match-request.entity';
 import { CreateMatchRequestInput } from './dto/create-match-request.input';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { CacheService } from '../cache/cache.service';
-import { Skill } from '../skill/skill.entity';
+import { Skill, SkillType, ProficiencyLevel } from '../skill/skill.entity';
 import { Session, SessionStatus } from '../session/session.entity';
 import { SuggestedMatch } from './dto/suggested-match.output';
 import { PaginationInput } from '../../common/dto/pagination.dto';
@@ -24,6 +24,37 @@ import { SuggestedMatchesFilterInput } from './dto/suggested-matches-filter.inpu
 import { User } from '../user/user.entity';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/notification.entity';
+
+interface SkillRow {
+  id: string;
+  userId: string;
+  userName?: string;
+  title: string;
+  description: string;
+  category: string;
+  type: string;
+  proficiencyLevel: string;
+  isActive: boolean;
+  embedding?: string | number[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CandidateRow {
+  id: string;
+  userId: string;
+  userName?: string;
+  title: string;
+  category: string;
+  embedding?: string | number[];
+  distance: number | null;
+  description?: string;
+  type?: string;
+  proficiencyLevel?: string;
+  isActive?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 @Injectable()
 export class MatchService {
@@ -152,7 +183,7 @@ export class MatchService {
     }
 
     // Live push so the recipient's matches inbox updates without a refresh.
-    this.pubSub.publish('matchRequestUpdated', {
+    await this.pubSub.publish('matchRequestUpdated', {
       matchRequestUpdated: savedRequest,
     });
 
@@ -230,7 +261,7 @@ export class MatchService {
     }
 
     // Live push so the original sender's "Sent" tab updates the moment we respond.
-    this.pubSub.publish('matchRequestUpdated', {
+    await this.pubSub.publish('matchRequestUpdated', {
       matchRequestUpdated: updated,
     });
 
@@ -263,7 +294,7 @@ export class MatchService {
     matchRequest.status = MatchRequestStatus.CANCELLED;
     const updated = await this.matchRequestRepository.save(matchRequest);
 
-    this.pubSub.publish('matchRequestUpdated', {
+    await this.pubSub.publish('matchRequestUpdated', {
       matchRequestUpdated: updated,
     });
 
@@ -368,21 +399,21 @@ export class MatchService {
     const excludedArray = Array.from(excludedSkillIds);
     const completedCategories = await this.computeCompletedCategories(userId);
 
-    const userWants = await this.skillRepository.manager.query(
+    const userWants: SkillRow[] = await this.skillRepository.manager.query(
       `SELECT id, title, category, embedding FROM skills
        WHERE "userId" = $1 AND type = 'WANT' AND "isActive" = true
        ORDER BY "createdAt" DESC`,
       [userId],
     );
 
-    const userOffers = await this.skillRepository.manager.query(
+    const userOffers: SkillRow[] = await this.skillRepository.manager.query(
       `SELECT id, title, category, embedding FROM skills
        WHERE "userId" = $1 AND type = 'OFFER' AND "isActive" = true`,
       [userId],
     );
 
     if (!userWants || userWants.length === 0) {
-      const cold = await this.skillRepository.manager.query(
+      const cold: SkillRow[] = await this.skillRepository.manager.query(
         `SELECT s.*, u.name as "userName", u.id as "userId" FROM skills s
          JOIN users u ON s."userId" = u.id
          WHERE s."userId" != $1 AND s.type = 'OFFER' AND s."isActive" = true
@@ -390,7 +421,7 @@ export class MatchService {
          ORDER BY s."createdAt" DESC LIMIT 12`,
         [userId, excludedArray.length ? excludedArray : null],
       );
-      const result: SuggestedMatch[] = cold.map((row: any) => ({
+      const result: SuggestedMatch[] = cold.map((row: SkillRow) => ({
         id: `cold-${row.id}`,
         skill: this.rowToSkillWithUser(row),
         score: 50,
@@ -409,14 +440,13 @@ export class MatchService {
       return result;
     }
 
-    // Collect candidate OFFER skills from other users that match any of my WANT skills.
     const candidates = new Map<
       string,
-      { offerRow: any; wantRow: any; distance: number | null }
+      { offerRow: CandidateRow; wantRow: SkillRow; distance: number | null }
     >();
 
     for (const want of userWants) {
-      let rows: any[] = [];
+      let rows: CandidateRow[] = [];
       if (want.embedding) {
         rows = await this.skillRepository.manager.query(
           `SELECT s.*, u.name as "userName", u.id as "userId", (s.embedding <=> $2) AS distance
@@ -459,10 +489,9 @@ export class MatchService {
     ];
 
     if (otherUserIds.length > 0 && userOffers.length > 0) {
-      const userOfferEmbeddings = userOffers.filter((o: any) => o.embedding);
       // Compute reverse scores in a single loop over other users (no N+1 queries).
       for (const otherUserId of otherUserIds) {
-        const otherWants = await this.skillRepository.manager.query(
+        const otherWants: SkillRow[] = await this.skillRepository.manager.query(
           `SELECT id, title, category, embedding FROM skills
            WHERE "userId" = $1 AND type = 'WANT' AND "isActive" = true`,
           [otherUserId],
@@ -476,17 +505,18 @@ export class MatchService {
             let dist: number | null = null;
             if (myOffer.embedding && otherWant.embedding) {
               // Use pgvector operator via raw SQL for one-shot distance.
-              const vecResult = await this.skillRepository.manager.query(
-                `SELECT ($1::vector <=> $2::vector) AS dist`,
-                [
-                  typeof myOffer.embedding === 'string'
-                    ? myOffer.embedding
-                    : JSON.stringify(myOffer.embedding),
-                  typeof otherWant.embedding === 'string'
-                    ? otherWant.embedding
-                    : JSON.stringify(otherWant.embedding),
-                ],
-              );
+              const vecResult: Array<{ dist: number }> =
+                await this.skillRepository.manager.query(
+                  `SELECT ($1::vector <=> $2::vector) AS dist`,
+                  [
+                    typeof myOffer.embedding === 'string'
+                      ? myOffer.embedding
+                      : JSON.stringify(myOffer.embedding),
+                    typeof otherWant.embedding === 'string'
+                      ? otherWant.embedding
+                      : JSON.stringify(otherWant.embedding),
+                  ],
+                );
               dist = vecResult[0]?.dist ?? null;
             }
             const revAffinity = this.calculateAffinity(
@@ -561,7 +591,7 @@ export class MatchService {
     // Diversity sort: take at most 2 per user, interleave categories.
     const byUser = new Map<string, SuggestedMatch[]>();
     for (const r of results) {
-      const uid = (r.skill as any).user?.id || 'unknown';
+      const uid = (r.skill as Skill & { userId: string }).userId || 'unknown';
       if (!byUser.has(uid)) byUser.set(uid, []);
       byUser.get(uid)!.push(r);
     }
@@ -577,9 +607,20 @@ export class MatchService {
     return ranked;
   }
 
-  private rowToSkillWithUser(row: any): Skill {
-    const skill = this.rowToSkill(row);
-    (skill as any).user = { id: row.userId, name: row.userName };
+  private rowToSkillWithUser(row: CandidateRow | SkillRow): Skill {
+    const skill = this.rowToSkill({
+      ...row,
+      description: row.description ?? '',
+      type: row.type ?? 'OFFER',
+      proficiencyLevel: row.proficiencyLevel ?? 'INTERMEDIATE',
+      isActive: row.isActive ?? true,
+      createdAt: row.createdAt ?? new Date(),
+      updatedAt: row.updatedAt ?? new Date(),
+    } as SkillRow);
+    (skill as Skill & { user: Partial<User> }).user = {
+      id: row.userId,
+      name: row.userName ?? '',
+    } as Partial<User> as User;
     return skill;
   }
 
@@ -614,13 +655,14 @@ export class MatchService {
     }
 
     // Skills currently in an active session where this user participates.
-    const activeSessionSkills = await this.skillRepository.manager.query(
-      `SELECT "skill1Id", "skill2Id" FROM sessions
+    const activeSessionSkills: Array<{ skill1Id?: string; skill2Id?: string }> =
+      await this.skillRepository.manager.query(
+        `SELECT "skill1Id", "skill2Id" FROM sessions
        WHERE ("participant1Id" = $1 OR "participant2Id" = $1)
          AND status IN ('NEGOTIATING', 'SCHEDULED', 'ACTIVE')`,
-      [userId],
-    );
-    for (const row of activeSessionSkills as any[]) {
+        [userId],
+      );
+    for (const row of activeSessionSkills) {
       if (row.skill1Id) excluded.add(row.skill1Id);
       if (row.skill2Id) excluded.add(row.skill2Id);
     }
@@ -632,28 +674,29 @@ export class MatchService {
     userId: string,
   ): Promise<Set<string>> {
     const categories = new Set<string>();
-    const sessions = await this.sessionRepository.manager.query(
-      `SELECT s.category FROM sessions sess
+    const sessions: Array<{ category: string }> =
+      await this.sessionRepository.manager.query(
+        `SELECT s.category FROM sessions sess
        JOIN skills s ON (sess."skill1Id" = s.id OR sess."skill2Id" = s.id)
        WHERE (sess."participant1Id" = $1 OR sess."participant2Id" = $1)
          AND sess.status = 'COMPLETED'`,
-      [userId],
-    );
+        [userId],
+      );
     for (const row of sessions) {
       if (row.category) categories.add(row.category);
     }
     return categories;
   }
 
-  private rowToSkill(row: any): Skill {
+  private rowToSkill(row: SkillRow): Skill {
     return {
       id: row.id,
       userId: row.userId,
       title: row.title,
-      description: row.description,
+      description: row.description || '',
       category: row.category,
-      type: row.type,
-      proficiencyLevel: row.proficiencyLevel,
+      type: row.type as SkillType,
+      proficiencyLevel: row.proficiencyLevel as ProficiencyLevel,
       isActive: row.isActive,
       embedding: undefined,
       createdAt: row.createdAt,
@@ -662,8 +705,8 @@ export class MatchService {
   }
 
   private calculateAffinity(
-    offer: any,
-    want: any,
+    offer: { category?: string; title?: string },
+    want: { category?: string; title?: string },
     distance: number | null,
     completedCategories: Set<string>,
   ): { total: number; semantic: number; category: number; depth: number } {
@@ -675,7 +718,9 @@ export class MatchService {
 
     // Depth boost: if the user has already completed a session in this category,
     // it suggests they are "learning in depth" or seeking more advanced knowledge.
-    const isReturningCategory = completedCategories.has(offer.category);
+    const isReturningCategory = offer.category
+      ? completedCategories.has(offer.category)
+      : false;
     const depth =
       offer.category === want.category && isReturningCategory ? 10 : 0;
 

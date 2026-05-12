@@ -4,7 +4,6 @@ import {
   Param,
   Query,
   Body,
-  Post,
   Get,
   UnauthorizedException,
   Req,
@@ -37,10 +36,10 @@ export class AiController {
   @Sse('session/:id/summary/stream')
   streamSummary(
     @Param('id') sessionId: string,
-    @Req() req: any,
+    @Req() req: { user?: { id?: string; sub?: string } },
   ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      (async () => {
+      void (async () => {
         try {
           const userId = req.user?.id || req.user?.sub;
           if (userId) {
@@ -104,7 +103,7 @@ export class AiController {
     @Query('duration') durationParam: string,
   ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      (async () => {
+      void (async () => {
         try {
           const duration = parseInt(durationParam || '60', 10) || 60;
           const generator = this.aiService.generateAgendaStream(
@@ -133,7 +132,7 @@ export class AiController {
     @Query('title') skillTitle: string,
   ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      (async () => {
+      void (async () => {
         try {
           const reviews = await this.reviewRepository.find({
             where: { revieweeId: userId, skillId },
@@ -182,7 +181,7 @@ export class AiController {
     @Param('id') userId: string,
   ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      (async () => {
+      void (async () => {
         try {
           const reviews = await this.reviewRepository.find({
             where: { revieweeId: userId },
@@ -237,10 +236,10 @@ export class AiController {
   streamTakeaways(
     @Param('id') sessionId: string,
     @Query('notes') notes: string,
-    @Req() req: any,
+    @Req() req: { user?: { id?: string; sub?: string } },
   ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      (async () => {
+      void (async () => {
         try {
           const userId = req.user?.id || req.user?.sub;
           if (userId) {

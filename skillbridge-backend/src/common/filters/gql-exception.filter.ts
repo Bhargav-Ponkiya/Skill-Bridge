@@ -1,4 +1,4 @@
-import { Catch, ArgumentsHost, Logger } from '@nestjs/common';
+import { Catch, Logger } from '@nestjs/common';
 import { GqlExceptionFilter as NestGqlExceptionFilter } from '@nestjs/graphql';
 import { GraphQLError } from 'graphql';
 
@@ -6,19 +6,24 @@ import { GraphQLError } from 'graphql';
 export class GqlExceptionFilter implements NestGqlExceptionFilter {
   private readonly logger = new Logger(GqlExceptionFilter.name);
 
-  catch(exception: unknown, _host: ArgumentsHost): GraphQLError {
+  catch(exception: unknown): GraphQLError {
     if (exception instanceof GraphQLError) {
       return exception;
     }
 
     if (exception instanceof Error) {
-      const response = (exception as any).getResponse?.();
+      const exceptionWithResponse = exception as {
+        getResponse?: () => unknown;
+        status?: number;
+      };
+      const response = exceptionWithResponse.getResponse?.();
       let message = exception.message;
+
       if (typeof response === 'object' && response !== null) {
-        // Extract clean message from NestJS exception response
-        message = Array.isArray(response.message)
-          ? response.message[0]
-          : (response.message ?? exception.message);
+        const res = response as { message?: string | string[] };
+        message = Array.isArray(res.message)
+          ? res.message[0]
+          : (res.message ?? exception.message);
       }
 
       this.logger.error(`Unhandled exception: ${message}`, exception.stack);
@@ -26,7 +31,7 @@ export class GqlExceptionFilter implements NestGqlExceptionFilter {
       return new GraphQLError(message, {
         extensions: {
           code:
-            (exception as any).status === 400
+            exceptionWithResponse.status === 400
               ? 'BAD_USER_INPUT'
               : 'INTERNAL_SERVER_ERROR',
           response,

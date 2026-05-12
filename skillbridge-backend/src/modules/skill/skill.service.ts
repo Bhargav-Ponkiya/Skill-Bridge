@@ -41,7 +41,7 @@ export class SkillService implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     try {
       const orphans = await this.skillRepository.find({
-        where: { embedding: IsNull() as any, isActive: true },
+        where: { embedding: IsNull(), isActive: true },
         take: 50,
       });
       if (orphans.length === 0) return;
@@ -52,7 +52,7 @@ export class SkillService implements OnApplicationBootstrap {
             this.embeddableText(skill),
           );
           if (embedding) {
-            skill.embedding = embedding as any;
+            skill.embedding = embedding as unknown as string;
             await this.skillRepository.save(skill);
           }
         } catch (err) {
@@ -82,7 +82,7 @@ export class SkillService implements OnApplicationBootstrap {
         this.embeddableText(skill),
       );
       if (embedding) {
-        skill.embedding = embedding as any;
+        skill.embedding = embedding as unknown as string;
       }
     } catch (err) {
       this.logger.warn(`Could not embed skill: ${(err as Error).message}`);
@@ -162,20 +162,26 @@ export class SkillService implements OnApplicationBootstrap {
       );
 
     // Prevent deletion if the skill is in any active exchange
-    const activeRequestCount = await this.skillRepository.manager.query(
-      `SELECT COUNT(*)::int AS count FROM match_requests
+    const activeRequestCount: Array<{ count: number }> =
+      await this.skillRepository.manager.query(
+        `SELECT COUNT(*)::int AS count FROM match_requests
        WHERE ("offeredSkillId" = $1 OR "wantedSkillId" = $1)
          AND status = 'PENDING'`,
-      [id],
-    );
-    const activeSessionCount = await this.skillRepository.manager.query(
-      `SELECT COUNT(*)::int AS count FROM sessions
+        [id],
+      );
+
+    const activeSessionCount: Array<{ count: number }> =
+      await this.skillRepository.manager.query(
+        `SELECT COUNT(*)::int AS count FROM sessions
        WHERE ("skill1Id" = $1 OR "skill2Id" = $1)
          AND status IN ('NEGOTIATING', 'SCHEDULED', 'ACTIVE')`,
-      [id],
-    );
+        [id],
+      );
 
-    if (activeRequestCount[0]?.count > 0 || activeSessionCount[0]?.count > 0) {
+    if (
+      (activeRequestCount[0]?.count ?? 0) > 0 ||
+      (activeSessionCount[0]?.count ?? 0) > 0
+    ) {
       throw new BadRequestException(
         'Cannot delete a skill that is part of an active exchange. Deactivate it instead.',
       );
@@ -200,7 +206,7 @@ export class SkillService implements OnApplicationBootstrap {
   }
 
   async searchSkills(
-    currentUserId: string,
+    currentUserId: string | null,
     query?: string,
     category?: string,
     type?: string,
@@ -223,7 +229,10 @@ export class SkillService implements OnApplicationBootstrap {
       qb.andWhere('skill.category = :category', { category });
     }
 
-    if (type && (type === SkillType.OFFER || type === SkillType.WANT)) {
+    if (
+      type &&
+      ((type as any) === SkillType.OFFER || (type as any) === SkillType.WANT)
+    ) {
       qb.andWhere('skill.type = :type', { type });
     }
 
@@ -260,7 +269,10 @@ export class SkillService implements OnApplicationBootstrap {
     if (category && category !== 'All') {
       countQb.andWhere('skill.category = :category', { category });
     }
-    if (type && (type === SkillType.OFFER || type === SkillType.WANT)) {
+    if (
+      type &&
+      ((type as any) === SkillType.OFFER || (type as any) === SkillType.WANT)
+    ) {
       countQb.andWhere('skill.type = :type', { type });
     }
 
@@ -330,6 +342,6 @@ export class SkillService implements OnApplicationBootstrap {
   }
 
   async findManyByIds(ids: readonly string[]): Promise<Skill[]> {
-    return this.skillRepository.find({ where: { id: In(ids as string[]) } });
+    return this.skillRepository.find({ where: { id: In(ids) } });
   }
 }

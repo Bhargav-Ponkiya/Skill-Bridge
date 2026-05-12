@@ -39,10 +39,10 @@ export class ReviewResolver {
 
   @Mutation(() => Review)
   async createReview(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id?: string; sub?: string },
     @Args('input') input: CreateReviewInput,
   ): Promise<Review> {
-    return this.reviewService.createReview(user.id || user.sub, input);
+    return this.reviewService.createReview((user.id || user.sub)!, input);
   }
 
   @ResolveField(() => User, { nullable: true })

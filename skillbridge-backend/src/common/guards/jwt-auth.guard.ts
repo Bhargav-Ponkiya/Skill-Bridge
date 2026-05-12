@@ -34,31 +34,34 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return (await super.canActivate(context)) as boolean;
   }
 
-  getRequest(context: ExecutionContext) {
+  getRequest(context: ExecutionContext): unknown {
     if (context.getType().toString() === 'graphql') {
       const ctx = GqlExecutionContext.create(context);
-      return ctx.getContext().req;
+      const rawCtx: unknown = ctx.getContext();
+      const gqlCtx = rawCtx as { req: unknown };
+      return gqlCtx.req;
     }
-    return context.switchToHttp().getRequest() ?? { headers: {} };
+    return context.switchToHttp().getRequest();
   }
 
-  handleRequest(
-    err: any,
-    user: any,
-    info: any,
+  handleRequest<TUser = any>(
+    err: unknown,
+    user: TUser,
+    _info: unknown,
     context: ExecutionContext,
-    status?: any,
-  ) {
+  ): TUser {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
     if (isPublic) {
-      // For public routes: return null instead of throwing
-      if (err || !user) return null;
+      if (err || !user) return null as TUser;
       return user;
     }
-    if (err || !user) throw err || new UnauthorizedException();
+    if (err || !user) {
+      if (err instanceof Error) throw err;
+      throw new UnauthorizedException();
+    }
     return user;
   }
 }

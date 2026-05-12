@@ -3,7 +3,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const EMBED_MODEL = 'gemini-embedding-001';
 // On a 429 we stop hitting the API for this long. Avoids burning the rest of the daily
 // quota retrying when the key has `limit: 0` for everything we listed.
 const QUOTA_COOLDOWN_MS = 10 * 60 * 1000;
@@ -37,10 +36,10 @@ export class AiService {
     this.summaryModels = configuredModels.length
       ? configuredModels
       : [
-          'gemini-3.1-flash-lite',
-          'gemini-2.5-flash',
+          'gemini-1.5-flash-latest',
+          'gemini-1.5-pro-latest',
           'gemini-1.5-flash',
-          'gemini-1.5-flash-8b',
+          'gemini-pro',
         ];
     this.logger.log(
       `Gemini summary fallback chain: ${this.summaryModels.join(' → ')}`,
@@ -78,7 +77,9 @@ export class AiService {
           );
           continue;
         }
-        const json = await res.json();
+        const json = (await res.json()) as {
+          embedding?: { values: number[] };
+        };
         if (json?.embedding?.values) {
           return json.embedding.values;
         }
@@ -283,7 +284,10 @@ export class AiService {
   async generateLearningInsights(
     skillTitle: string,
     proficiencyLevel: string,
-  ): Promise<{ roadmap: string; resources: any[] }> {
+  ): Promise<{
+    roadmap: string;
+    resources: Array<{ title: string; url: string; description: string }>;
+  }> {
     const prompt = [
       `Career advisor for a user who completed "${skillTitle}" at ${proficiencyLevel} level.`,
       '',
@@ -315,7 +319,10 @@ export class AiService {
       const start = response.indexOf('{');
       const end = response.lastIndexOf('}');
       if (start === -1 || end === -1) throw new Error('No JSON object found');
-      const json = JSON.parse(response.substring(start, end + 1));
+      const json = JSON.parse(response.substring(start, end + 1)) as {
+        roadmap: string;
+        resources: Array<{ title: string; url: string; description: string }>;
+      };
       return {
         roadmap: json.roadmap || 'No roadmap generated.',
         resources: Array.isArray(json.resources) ? json.resources : [],
@@ -340,7 +347,9 @@ export class AiService {
     return insights.roadmap;
   }
 
-  async generateResources(skillTitle: string): Promise<any[]> {
+  async generateResources(
+    skillTitle: string,
+  ): Promise<Array<{ title: string; url: string; description: string }>> {
     const insights = await this.generateLearningInsights(
       skillTitle,
       'INTERMEDIATE',
@@ -419,7 +428,9 @@ export class AiService {
   private rememberSummary(key: string, value: string) {
     if (!value) return;
     if (this.summaryCache.size >= AiService.SUMMARY_CACHE_LIMIT) {
-      const firstKey = this.summaryCache.keys().next().value;
+      const firstKey = this.summaryCache.keys().next().value as
+        | string
+        | undefined;
       if (firstKey) this.summaryCache.delete(firstKey);
     }
     this.summaryCache.set(key, value);

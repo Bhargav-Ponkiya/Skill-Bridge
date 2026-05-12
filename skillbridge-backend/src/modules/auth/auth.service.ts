@@ -23,7 +23,7 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  generateTokens(user: User): { accessToken: string; refreshToken?: string } {
+  generateTokens(user: { id: string; email: string }): { accessToken: string; refreshToken?: string } {
     const payload: JwtPayload = { sub: user.id, email: user.email };
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('app.jwtSecret')!,

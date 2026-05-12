@@ -26,7 +26,7 @@ export class MessageResolver {
 
   @Query(() => [Message])
   async messages(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id?: string; sub?: string },
     @Args('sessionId') sessionId: string,
     @Args('limit', { type: () => Int, nullable: true })
     limit?: number,
@@ -43,19 +43,17 @@ export class MessageResolver {
 
   @Mutation(() => Message)
   async sendMessage(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id?: string; sub?: string; name?: string },
     @Args('input') input: CreateMessageInput,
   ): Promise<Message> {
-    const message = await this.messageService.createMessage(
-      user.id || user.sub,
-      input,
-    );
-    this.pubSub.publish('messageAdded', { messageAdded: message });
+    const userId = (user.id || user.sub)!;
+    const message = await this.messageService.createMessage(userId, input);
+    await this.pubSub.publish('messageAdded', { messageAdded: message });
     // Sending a message implicitly stops the "is typing…" indicator for this user.
-    this.pubSub.publish('typingChanged', {
+    await this.pubSub.publish('typingChanged', {
       typingChanged: {
         sessionId: input.sessionId,
-        userId: user.id || user.sub,
+        userId,
         userName: user.name,
         isTyping: false,
       },
@@ -65,14 +63,15 @@ export class MessageResolver {
 
   @Mutation(() => Boolean)
   async setTyping(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id?: string; sub?: string; name?: string },
     @Args('sessionId') sessionId: string,
     @Args('isTyping') isTyping: boolean,
   ): Promise<boolean> {
-    this.pubSub.publish('typingChanged', {
+    const userId = (user.id || user.sub)!;
+    await this.pubSub.publish('typingChanged', {
       typingChanged: {
         sessionId,
-        userId: user.id || user.sub,
+        userId,
         userName: user.name,
         isTyping,
       },
@@ -82,10 +81,13 @@ export class MessageResolver {
 
   @Mutation(() => Int)
   async markSessionRead(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id?: string; sub?: string },
     @Args('sessionId') sessionId: string,
   ): Promise<number> {
-    return this.messageService.markSessionRead(sessionId, user.id || user.sub);
+    return this.messageService.markSessionRead(
+      sessionId,
+      (user.id || user.sub)!,
+    );
   }
 
   @ResolveField(() => User, { nullable: true })

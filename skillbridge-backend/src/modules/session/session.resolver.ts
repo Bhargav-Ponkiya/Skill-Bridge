@@ -22,26 +22,28 @@ export class SessionResolver {
   ) {}
 
   @Query(() => [Session])
-  async mySessions(@CurrentUser() user: any): Promise<Session[]> {
-    return this.sessionService.getMySessions(user.id || user.sub);
+  async mySessions(
+    @CurrentUser() user: { id: string; sub?: string },
+  ): Promise<Session[]> {
+    return this.sessionService.getMySessions((user.id || user.sub)!);
   }
 
   @Query(() => Session)
   async session(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('id') id: string,
   ): Promise<Session> {
-    return this.sessionService.getSession(user.id || user.sub, id);
+    return this.sessionService.getSession((user.id || user.sub)!, id);
   }
 
   @Mutation(() => Session)
   async updateSession(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('id') id: string,
     @Args('input') input: UpdateSessionInput,
   ): Promise<Session> {
     return this.sessionService.updateSessionDetails(
-      user.id || user.sub,
+      (user.id || user.sub)!,
       id,
       input,
     );
@@ -49,12 +51,12 @@ export class SessionResolver {
 
   @Mutation(() => Session)
   async changeSessionStatus(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('id') id: string,
     @Args('status', { type: () => SessionStatus }) status: SessionStatus,
   ): Promise<Session> {
     return this.sessionService.advanceSessionStatus(
-      user.id || user.sub,
+      (user.id || user.sub)!,
       id,
       status,
     );
@@ -62,20 +64,20 @@ export class SessionResolver {
 
   @Mutation(() => Session)
   async toggleSessionProgress(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('id') id: string,
   ): Promise<Session> {
-    return this.sessionService.toggleSessionProgress(user.id || user.sub, id);
+    return this.sessionService.toggleSessionProgress((user.id || user.sub)!, id);
   }
 
   @Mutation(() => Session)
   async cancelSession(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('id') id: string,
     @Args('reason', { nullable: true }) reason?: string,
   ): Promise<Session> {
     return this.sessionService.cancelSession(
-      user.id || user.sub,
+      (user.id || user.sub)!,
       id,
       reason ?? '',
     );

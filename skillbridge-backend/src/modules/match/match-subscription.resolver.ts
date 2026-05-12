@@ -1,4 +1,4 @@
-import { Resolver, Subscription, Args } from '@nestjs/graphql';
+import { Resolver, Subscription } from '@nestjs/graphql';
 import { Inject, UseGuards } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 import { MatchRequest } from './match-request.entity';
@@ -15,14 +15,17 @@ export class MatchSubscriptionResolver {
    * payloads where this user is on one side of the request.
    */
   @Subscription(() => MatchRequest, {
-    filter: (payload: any, variables: any) => {
+    filter: (
+      payload: { matchRequestUpdated: MatchRequest },
+      variables: { userId: string },
+    ) => {
       const r = payload.matchRequestUpdated;
       return (
         r.fromUserId === variables.userId || r.toUserId === variables.userId
       );
     },
   })
-  matchRequestUpdated(@Args('userId') _userId: string) {
+  matchRequestUpdated() {
     return this.pubSub.asyncIterableIterator('matchRequestUpdated');
   }
 }

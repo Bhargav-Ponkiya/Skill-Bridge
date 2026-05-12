@@ -1,4 +1,4 @@
-import { Resolver, Subscription, Args } from '@nestjs/graphql';
+import { Resolver, Subscription } from '@nestjs/graphql';
 import { Inject, UseGuards } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 import { Message } from './message.entity';
@@ -11,18 +11,22 @@ export class MessageSubscriptionResolver {
   constructor(@Inject('PUB_SUB') private readonly pubSub: PubSub) {}
 
   @Subscription(() => Message, {
-    filter: (payload: any, variables: any) =>
-      payload.messageAdded.sessionId === variables.sessionId,
+    filter: (
+      payload: { messageAdded: Message },
+      variables: { sessionId: string },
+    ) => payload.messageAdded.sessionId === variables.sessionId,
   })
-  messageAdded(@Args('sessionId') _sessionId: string) {
+  messageAdded() {
     return this.pubSub.asyncIterableIterator('messageAdded');
   }
 
   @Subscription(() => TypingEvent, {
-    filter: (payload: any, variables: any) =>
-      payload.typingChanged.sessionId === variables.sessionId,
+    filter: (
+      payload: { typingChanged: TypingEvent },
+      variables: { sessionId: string },
+    ) => payload.typingChanged.sessionId === variables.sessionId,
   })
-  typingChanged(@Args('sessionId') _sessionId: string) {
+  typingChanged() {
     return this.pubSub.asyncIterableIterator('typingChanged');
   }
 }

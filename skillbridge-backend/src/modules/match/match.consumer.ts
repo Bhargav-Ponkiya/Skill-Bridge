@@ -11,7 +11,7 @@ export class MatchConsumer {
     queue: 'match-processing-queue',
     allowNonJsonMessages: true,
   })
-  public handleMatchRequested(msg: any) {
+  public handleMatchRequested(msg: { matchRequestId: string }) {
     this.logger.log(
       `Received match.requested event for MatchRequest ID: ${msg.matchRequestId}`,
     );

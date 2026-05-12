@@ -35,12 +35,12 @@ export class MatchResolver {
 
   @Query(() => PaginatedMatchRequests)
   async myMatchRequests(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('type') type: 'sent' | 'received' | 'incoming',
     @Args('pagination', { nullable: true }) pagination?: PaginationInput,
   ): Promise<PaginatedMatchRequests> {
     return this.matchService.getMyRequests(
-      user.id || user.sub,
+      (user.id || user.sub)!,
       type,
       pagination,
     );
@@ -50,8 +50,10 @@ export class MatchResolver {
     description:
       "Top ranked OFFER skills from other users that match the current user's WANTs.",
   })
-  async suggestedMatches(@CurrentUser() user: any): Promise<SuggestedMatch[]> {
-    return this.matchService.getSuggestedMatches(user.id || user.sub);
+  async suggestedMatches(
+    @CurrentUser() user: { id: string; sub?: string },
+  ): Promise<SuggestedMatch[]> {
+    return this.matchService.getSuggestedMatches((user.id || user.sub)!);
   }
 
   @Query(() => PaginatedSuggestedMatches, {
@@ -59,10 +61,10 @@ export class MatchResolver {
       'Paginated and filterable suggested matches for the explore page.',
   })
   async suggestedMatchesExplore(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('filter', { nullable: true }) filter?: SuggestedMatchesFilterInput,
   ): Promise<PaginatedSuggestedMatches> {
-    return this.matchService.getSuggestedMatchesPaginated(user.id || user.sub, {
+    return this.matchService.getSuggestedMatchesPaginated((user.id || user.sub)!, {
       page: filter?.page ?? 1,
       limit: filter?.limit ?? 20,
       category: filter?.category,
@@ -73,20 +75,20 @@ export class MatchResolver {
 
   @Mutation(() => MatchRequest)
   async sendMatchRequest(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('input') input: CreateMatchRequestInput,
   ): Promise<MatchRequest> {
-    return this.matchService.sendMatchRequest(user.id || user.sub, input);
+    return this.matchService.sendMatchRequest((user.id || user.sub)!, input);
   }
 
   @Mutation(() => MatchRequest)
   async respondToMatchRequest(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('requestId') requestId: string,
     @Args('accept') accept: boolean,
   ): Promise<MatchRequest> {
     return this.matchService.respondToMatchRequest(
-      user.id || user.sub,
+      (user.id || user.sub)!,
       requestId,
       accept,
     );
@@ -94,10 +96,10 @@ export class MatchResolver {
 
   @Mutation(() => MatchRequest)
   async cancelMatchRequest(
-    @CurrentUser() user: any,
+    @CurrentUser() user: { id: string; sub?: string },
     @Args('requestId') requestId: string,
   ): Promise<MatchRequest> {
-    return this.matchService.cancelMatchRequest(user.id || user.sub, requestId);
+    return this.matchService.cancelMatchRequest((user.id || user.sub)!, requestId);
   }
 
   @ResolveField(() => User, { nullable: true })

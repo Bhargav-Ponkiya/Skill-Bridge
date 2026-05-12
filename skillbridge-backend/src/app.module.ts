@@ -80,22 +80,42 @@ import { RateLimitGuard } from './modules/cache/rate-limit.guard';
       subscriptions: {
         'graphql-ws': true,
       },
-      context: ({ req, res, connectionParams }: any) => {
+      context: ({
+        req,
+        res,
+        connectionParams,
+      }: {
+        req?: Record<string, unknown> & {
+          headers: Record<string, string | string[] | undefined>;
+          connectionParams?: Record<string, unknown>;
+          get?: (name: string) => string | undefined;
+        };
+        res?: unknown;
+        connectionParams?: Record<string, unknown>;
+      }) => {
         const ctxReq = req || { headers: {} };
         if (connectionParams) {
           const normalizedHeaders = Object.keys(connectionParams).reduce(
             (acc, key) => {
-              acc[key.toLowerCase()] = connectionParams[key];
+              const val = connectionParams[key];
+              acc[key.toLowerCase()] =
+                typeof val === 'string' ? val : String(val);
               return acc;
             },
-            {} as any,
+            {} as Record<string, string>,
           );
-          ctxReq.headers = { ...ctxReq.headers, ...normalizedHeaders };
+          ctxReq.headers = {
+            ...ctxReq.headers,
+            ...normalizedHeaders,
+          };
           ctxReq.connectionParams = connectionParams;
-          // Passport strategies often use req.get('header-name')
           if (!ctxReq.get) {
-            ctxReq.get = function (name: string) {
-              return this.headers[name.toLowerCase()];
+            ctxReq.get = function (
+              this: { headers: Record<string, string | string[] | undefined> },
+              name: string,
+            ) {
+              const val = this.headers[name.toLowerCase()];
+              return Array.isArray(val) ? val[0] : val;
             };
           }
         }

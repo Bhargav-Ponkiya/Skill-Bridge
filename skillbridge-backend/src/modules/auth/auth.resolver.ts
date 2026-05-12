@@ -73,7 +73,7 @@ export class AuthResolver {
 
   @Public()
   @Mutation(() => Boolean)
-  async logout(@Context('res') res: Response): Promise<boolean> {
+  logout(@Context('res') res: Response): boolean {
     if (res) {
       res.clearCookie('accessToken');
     }

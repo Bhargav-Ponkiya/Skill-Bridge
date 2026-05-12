@@ -18,7 +18,7 @@ export class NotificationService {
     const saved = await this.notificationRepository.save(notification);
 
     // Publish via GraphQL subscriptions to frontends listening
-    this.pubSub.publish(`notificationData_${saved.userId}`, {
+    await this.pubSub.publish(`notificationData_${saved.userId}`, {
       onNotification: saved,
     });
 

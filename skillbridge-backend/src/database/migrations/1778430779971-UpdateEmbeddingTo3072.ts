@@ -19,14 +19,22 @@ export class UpdateEmbeddingTo30721778430779971 implements MigrationInterface {
 
     // 2. pgvector does not support ALTER COLUMN … TYPE directly for vector columns,
     //    so we drop and re-add the column with the new dimension.
-    await queryRunner.query(`ALTER TABLE "skills" DROP COLUMN IF EXISTS "embedding"`);
-    await queryRunner.query(`ALTER TABLE "skills" ADD COLUMN "embedding" vector(3072)`);
+    await queryRunner.query(
+      `ALTER TABLE "skills" DROP COLUMN IF EXISTS "embedding"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "skills" ADD COLUMN "embedding" vector(3072)`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Revert to vector(768) — existing 3072-d data is lost on rollback.
     await queryRunner.query(`UPDATE "skills" SET "embedding" = NULL`);
-    await queryRunner.query(`ALTER TABLE "skills" DROP COLUMN IF EXISTS "embedding"`);
-    await queryRunner.query(`ALTER TABLE "skills" ADD COLUMN "embedding" vector(768)`);
+    await queryRunner.query(
+      `ALTER TABLE "skills" DROP COLUMN IF EXISTS "embedding"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "skills" ADD COLUMN "embedding" vector(768)`,
+    );
   }
 }

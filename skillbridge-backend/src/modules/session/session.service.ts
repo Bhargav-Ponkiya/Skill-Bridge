@@ -45,7 +45,7 @@ export class SessionService implements OnApplicationBootstrap {
 
   private async saveAndBroadcast(session: Session): Promise<Session> {
     const saved = await this.sessionRepository.save(session);
-    this.pubSub.publish('sessionUpdated', { sessionUpdated: saved });
+    await this.pubSub.publish('sessionUpdated', { sessionUpdated: saved });
     return saved;
   }
 
@@ -269,11 +269,14 @@ export class SessionService implements OnApplicationBootstrap {
       session.scheduledAt = new Date();
     }
 
-    const result = await this.dataSource.query(
-      `UPDATE sessions SET status = $1, "version" = "version" + 1 WHERE id = $2 AND "version" = $3`,
-      [targetStatus, sessionId, session.version],
-    );
-    const affected = result?.rowCount ?? result?.[1] ?? 0;
+    const result: [unknown, number] | { rowCount: number } =
+      await this.dataSource.query(
+        `UPDATE sessions SET status = $1, "version" = "version" + 1 WHERE id = $2 AND "version" = $3`,
+        [targetStatus, sessionId, session.version],
+      );
+
+    const affected = Array.isArray(result) ? result[1] : result.rowCount;
+
     if (affected === 0) {
       throw new ConflictException(
         'Session was updated by your partner. Please refresh.',
@@ -284,7 +287,7 @@ export class SessionService implements OnApplicationBootstrap {
       where: { id: sessionId },
     });
     if (!updated) throw new NotFoundException('Session not found');
-    this.pubSub.publish('sessionUpdated', { sessionUpdated: updated });
+    await this.pubSub.publish('sessionUpdated', { sessionUpdated: updated });
 
     const partnerId =
       updated.participant1Id === userId
@@ -297,15 +300,18 @@ export class SessionService implements OnApplicationBootstrap {
         : targetStatus === SessionStatus.ACTIVE
           ? NotificationType.SESSION_REMINDER
           : NotificationType.SESSION_COMPLETED;
+    const notifTitle = 'Status Changed';
+    const notifMsg = `Your session is now ${targetStatus}.`;
 
-    await this.notificationService.create({
-      userId: partnerId,
-      type: notifType,
-      title: 'Status Changed',
-      message: `Your session is now ${targetStatus}.`,
-      relatedId: sessionId,
-    });
-
+    if (notifTitle) {
+      await this.notificationService.create({
+        userId: partnerId,
+        type: notifType,
+        title: notifTitle,
+        message: notifMsg,
+        relatedId: sessionId,
+      });
+    }
     return updated;
   }
 
@@ -333,12 +339,14 @@ export class SessionService implements OnApplicationBootstrap {
     // Atomic toggle: flip the boolean and bump version in one SQL statement.
     const field =
       session.participant1Id === userId ? 'p1Completed' : 'p2Completed';
-    const result = await this.dataSource.query(
-      `UPDATE sessions SET "${field}" = NOT "${field}", "version" = "version" + 1 WHERE id = $1 AND "version" = $2`,
-      [sessionId, session.version],
-    );
+    const result: [unknown, number] | { rowCount: number } =
+      await this.dataSource.query(
+        `UPDATE sessions SET "${field}" = NOT "${field}", "version" = "version" + 1 WHERE id = $1 AND "version" = $2`,
+        [sessionId, session.version],
+      );
 
-    const affected = result?.rowCount ?? result?.[1] ?? 0;
+    const affected = Array.isArray(result) ? result[1] : result.rowCount;
+
     if (affected === 0) {
       throw new ConflictException(
         'Session was updated by your partner. Please refresh.',
@@ -426,16 +434,19 @@ export class SessionService implements OnApplicationBootstrap {
       );
     }
 
-    const result = await this.dataSource.query(
-      `UPDATE sessions SET status = $1, summary = $2, "version" = "version" + 1 WHERE id = $3 AND "version" = $4`,
-      [
-        SessionStatus.CANCELLED,
-        reason || 'Session cancelled by user.',
-        sessionId,
-        session.version,
-      ],
-    );
-    const affected = result?.rowCount ?? result?.[1] ?? 0;
+    const result: [unknown, number] | { rowCount: number } =
+      await this.dataSource.query(
+        `UPDATE sessions SET status = $1, summary = $2, "version" = "version" + 1 WHERE id = $3 AND "version" = $4`,
+        [
+          SessionStatus.CANCELLED,
+          reason || 'Session cancelled by user.',
+          sessionId,
+          session.version,
+        ],
+      );
+
+    const affected = Array.isArray(result) ? result[1] : result.rowCount;
+
     if (affected === 0) {
       throw new ConflictException(
         'Session was updated by your partner. Please refresh.',
@@ -446,7 +457,7 @@ export class SessionService implements OnApplicationBootstrap {
       where: { id: sessionId },
     });
     if (!updated) throw new NotFoundException('Session not found');
-    this.pubSub.publish('sessionUpdated', { sessionUpdated: updated });
+    await this.pubSub.publish('sessionUpdated', { sessionUpdated: updated });
 
     const partnerId =
       updated.participant1Id === userId
@@ -551,7 +562,7 @@ export class SessionService implements OnApplicationBootstrap {
       [roadmap, JSON.stringify(suggestedResources), sessionId],
     );
 
-    this.pubSub.publish('sessionUpdated', {
+    await this.pubSub.publish('sessionUpdated', {
       sessionUpdated: await this.sessionRepository.findOne({
         where: { id: sessionId },
       }),

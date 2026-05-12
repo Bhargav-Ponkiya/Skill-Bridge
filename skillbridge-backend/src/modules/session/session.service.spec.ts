@@ -1,13 +1,14 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SessionService } from './session.service';
-import { Session, SessionStatus } from './session.entity';
+import { Session, SessionStatus, SessionFormat } from './session.entity';
 import { MatchRequest } from '../match/match-request.entity';
 import { User } from '../user/user.entity';
 import { Skill } from '../skill/skill.entity';
 import { AiService } from '../ai/ai.service';
 import { NotificationService } from '../notification/notification.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { PubSub } from 'graphql-subscriptions';
 import {
   ConflictException,
@@ -191,7 +192,7 @@ describe('SessionService', () => {
       await expect(
         service.updateSessionDetails(mockUserId, mockSessionId, {
           version: 1,
-        } as any),
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -201,7 +202,7 @@ describe('SessionService', () => {
       await expect(
         service.updateSessionDetails(mockUserId, mockSessionId, {
           version: 1,
-        } as any),
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -213,7 +214,7 @@ describe('SessionService', () => {
       await expect(
         service.updateSessionDetails(mockUserId, mockSessionId, {
           version: 1,
-        } as any),
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -225,7 +226,7 @@ describe('SessionService', () => {
       await expect(
         service.updateSessionDetails(mockUserId, mockSessionId, {
           version: 1,
-        } as any),
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -237,18 +238,18 @@ describe('SessionService', () => {
       });
       sessionRepo.findOne.mockResolvedValue(session);
 
-      const qb: any = {
+      const qb = {
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         getOne: jest.fn().mockResolvedValue({ id: 'conflicting-session' }),
       };
-      sessionRepo.createQueryBuilder.mockReturnValue(qb);
+      sessionRepo.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Session>);
 
       await expect(
         service.updateSessionDetails(mockUserId, mockSessionId, {
           version: 1,
           scheduledAt: new Date('2026-06-01T10:00:00Z'),
-        } as any),
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -260,17 +261,17 @@ describe('SessionService', () => {
       });
       sessionRepo.findOne.mockResolvedValue(session);
 
-      const qb: any = {
+      const qb = {
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         getOne: jest.fn().mockResolvedValue(null),
       };
-      sessionRepo.createQueryBuilder.mockReturnValue(qb);
+      sessionRepo.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Session>);
       sessionRepo.save.mockResolvedValue({
         ...session,
         status: SessionStatus.SCHEDULED,
         scheduledAt: new Date('2026-06-01T10:00:00Z'),
-        format: 'VIDEO' as any,
+        format: SessionFormat.VIDEO, // Fixed type
       });
 
       const result = await service.updateSessionDetails(
@@ -295,12 +296,12 @@ describe('SessionService', () => {
       });
       sessionRepo.findOne.mockResolvedValue(session);
 
-      const qb: any = {
+      const qb = {
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         getOne: jest.fn().mockResolvedValue(null),
       };
-      sessionRepo.createQueryBuilder.mockReturnValue(qb);
+      sessionRepo.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Session>);
       sessionRepo.save.mockResolvedValue({
         ...session,
         scheduledAt: new Date('2026-06-01T10:00:00Z'),
@@ -327,12 +328,12 @@ describe('SessionService', () => {
       });
       sessionRepo.findOne.mockResolvedValue(session);
 
-      const qb: any = {
+      const qb = {
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         getOne: jest.fn().mockResolvedValue(null),
       };
-      sessionRepo.createQueryBuilder.mockReturnValue(qb);
+      sessionRepo.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Session>);
       const saved = {
         ...session,
         meetingLink: 'https://meet.google.com/abc',
@@ -944,8 +945,7 @@ describe('SessionService', () => {
 
       // Both notifications for stale1 are in ONE try/catch, so if the first fails,
       // the second is skipped. stale2's two notifications should still fire.
-      notificationService.create
-        .mockRejectedValueOnce(new Error('db error'));
+      notificationService.create.mockRejectedValueOnce(new Error('db error'));
 
       sessionRepo.find.mockResolvedValue([stale1, stale2]);
       sessionRepo.save.mockResolvedValue(stale1);

@@ -36,7 +36,10 @@ async function bootstrap() {
 
   // ── CORS ──
   app.enableCors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       // Allow local development
       if (!origin || origin.includes('localhost')) {
         return callback(null, true);
@@ -49,12 +52,17 @@ async function bootstrap() {
       if (origin.endsWith('.vercel.app')) {
         return callback(null, true);
       }
-      
+
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'apollo-require-preflight'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Cookie',
+      'apollo-require-preflight',
+    ],
   });
 
   // ── Global Validation Pipe ──
@@ -78,4 +86,7 @@ async function bootstrap() {
   console.log(`📊 GraphQL Playground: http://localhost:${port}/graphql`);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Failed to start application:', err);
+  process.exit(1);
+});

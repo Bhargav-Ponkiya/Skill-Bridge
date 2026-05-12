@@ -316,8 +316,7 @@ async function seed() {
     },
     {
       senderId: userRecords['user5@test.com'].id,
-      content:
-        "Great! I'll walk you through Java basics. See you on the call.",
+      content: "Great! I'll walk you through Java basics. See you on the call.",
     },
   ];
   for (const m of scheduledMessages) {
@@ -486,7 +485,7 @@ async function seed() {
       level: 'EXPERT',
     },
     status: MatchRequestStatus.PENDING,
-    message: "Hey! I can teach you DevOps if you help me with UI/UX design.",
+    message: 'Hey! I can teach you DevOps if you help me with UI/UX design.',
   });
   await repo.matchRequests.save(u3u4Request);
   console.log('  Created pending match request.');
@@ -514,17 +513,35 @@ async function seed() {
   console.log('Seed complete!');
   console.log('');
   console.log('Users:');
-  console.log('  user1@test.com / password123 — teaches: React, TypeScript      | wants: Python, DevOps');
-  console.log('  user2@test.com / password123 — teaches: Python, ML            | wants: React, UI/UX');
-  console.log('  user3@test.com / password123 — teaches: Node.js, DevOps       | wants: ML, TypeScript, UI/UX');
-  console.log('  user4@test.com / password123 — teaches: UI/UX, Figma          | wants: Node.js, React');
-  console.log('  user5@test.com / password123 — teaches: Java, Spring Boot     | wants: Python, DevOps');
+  console.log(
+    '  user1@test.com / password123 — teaches: React, TypeScript      | wants: Python, DevOps',
+  );
+  console.log(
+    '  user2@test.com / password123 — teaches: Python, ML            | wants: React, UI/UX',
+  );
+  console.log(
+    '  user3@test.com / password123 — teaches: Node.js, DevOps       | wants: ML, TypeScript, UI/UX',
+  );
+  console.log(
+    '  user4@test.com / password123 — teaches: UI/UX, Figma          | wants: Node.js, React',
+  );
+  console.log(
+    '  user5@test.com / password123 — teaches: Java, Spring Boot     | wants: Python, DevOps',
+  );
   console.log('');
   console.log('Session lifecycle scenarios:');
-  console.log('  1. NEGOTIATING — user1 ↔ user2 (React ↔ Python)           → test ScheduleCard + Start/Cancel');
-  console.log('  2. SCHEDULED  — user3 ↔ user5 (DevOps ↔ Java)            → test Start Session + Mark Complete');
-  console.log('  3. COMPLETED  — user4 ↔ user2 (UI/UX ↔ React) + reviews  → test review form, AI roadmap, resources');
-  console.log('  4. PENDING    — user3 → user4 (DevOps → UI/UX)           → test Accept/Decline on Matches page');
+  console.log(
+    '  1. NEGOTIATING — user1 ↔ user2 (React ↔ Python)           → test ScheduleCard + Start/Cancel',
+  );
+  console.log(
+    '  2. SCHEDULED  — user3 ↔ user5 (DevOps ↔ Java)            → test Start Session + Mark Complete',
+  );
+  console.log(
+    '  3. COMPLETED  — user4 ↔ user2 (UI/UX ↔ React) + reviews  → test review form, AI roadmap, resources',
+  );
+  console.log(
+    '  4. PENDING    — user3 → user4 (DevOps → UI/UX)           → test Accept/Decline on Matches page',
+  );
   console.log('');
 
   await ds.destroy();
