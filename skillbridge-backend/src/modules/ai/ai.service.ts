@@ -235,9 +235,15 @@ export class AiService {
       }
     }
 
+    if (!lastQuotaError) {
+      this.logger.error(
+        'AI entire fallback chain failed. This usually means the GEMINI_API_KEY is invalid, the region is restricted, or the models are unavailable.',
+      );
+    }
+
     yield lastQuotaError
       ? "Today's AI quota is fully used across all configured Gemini models. Try again later."
-      : 'AI summary is temporarily unavailable.';
+      : 'AI summary is temporarily unavailable. Check server logs for details.';
   }
 
   async *generateAgendaStream(
