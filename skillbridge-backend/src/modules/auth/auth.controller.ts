@@ -19,20 +19,21 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
     const user = req.user as any;
+    const frontendUrl = this.configService.get<string>('app.frontendUrl');
+    
     if (!user) {
-      return res.redirect(
-        `${this.configService.get<string>('app.frontendUrl')}/login?error=google_auth_failed`,
-      );
+      return res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
     }
-    const { accessToken } = this.authService.generateTokens(user);
-    res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 15 * 60 * 1000,
-    });
-    res.redirect(
-      `${this.configService.get<string>('app.frontendUrl')}/dashboard`,
-    );
+
+    const { accessToken, refreshToken } = this.authService.generateTokens(user);
+    
+    // Pass tokens to the frontend callback page
+    // For better security, we could use a temporary code, but for this scale
+    // query params with short-lived tokens are the standard for cross-origin social auth.
+    const redirectUrl = new URL(`${frontendUrl}/auth-callback`);
+    redirectUrl.searchParams.set('token', accessToken);
+    if (refreshToken) redirectUrl.searchParams.set('refresh', refreshToken);
+
+    return res.redirect(redirectUrl.toString());
   }
 }
