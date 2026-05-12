@@ -1,6 +1,7 @@
 import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
+import { Public } from '../../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import type { Request, Response } from 'express';
 
@@ -12,10 +13,12 @@ export class AuthController {
   ) {}
 
   @Get('google')
+  @Public()
   @UseGuards(AuthGuard('google'))
   googleAuth() {}
 
   @Get('google/callback')
+  @Public()
   @UseGuards(AuthGuard('google'))
   googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
     const user = req.user as any;
