@@ -3,7 +3,7 @@ services:
     name: skillbridge-api
     runtime: docker
     plan: free
-    region: singapore
+    region: oregon
     rootDir: skillbridge-backend
     healthCheckPath: /health
     envVars:
