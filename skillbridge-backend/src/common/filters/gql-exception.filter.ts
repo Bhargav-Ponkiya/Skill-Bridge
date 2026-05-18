@@ -1,6 +1,7 @@
 import { Catch, Logger } from '@nestjs/common';
 import { GqlExceptionFilter as NestGqlExceptionFilter } from '@nestjs/graphql';
 import { GraphQLError } from 'graphql';
+import { PulseBoardLogger } from '../../utils/pulseboard-logger';
 
 @Catch()
 export class GqlExceptionFilter implements NestGqlExceptionFilter {
@@ -27,6 +28,10 @@ export class GqlExceptionFilter implements NestGqlExceptionFilter {
       }
 
       this.logger.error(`Unhandled exception: ${message}`, exception.stack);
+      PulseBoardLogger.error(`Unhandled GraphQL exception: ${message}`, {
+        stack: exception.stack,
+        status: exceptionWithResponse.status,
+      });
 
       return new GraphQLError(message, {
         extensions: {
@@ -41,6 +46,7 @@ export class GqlExceptionFilter implements NestGqlExceptionFilter {
     }
 
     this.logger.error('Unknown exception', String(exception));
+    PulseBoardLogger.error('Unknown exception', { error: String(exception) });
     return new GraphQLError('An unexpected error occurred', {
       extensions: { code: 'INTERNAL_SERVER_ERROR' },
     });

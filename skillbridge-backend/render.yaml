@@ -37,3 +37,7 @@ services:
         value: 7d
       - key: GEMINI_SUMMARY_MODELS
         value: gemini-2.5-flash,gemini-flash-latest,gemini-pro-latest
+      - key: PULSEBOARD_INGEST_URL
+        sync: false
+      - key: PULSEBOARD_API_KEY
+        sync: false
