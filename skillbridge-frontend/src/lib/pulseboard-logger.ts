@@ -8,7 +8,7 @@
  */
 
 export class PulseBoardLogger {
-  private static readonly INGEST_URL = process.env.NEXT_PUBLIC_PULSEBOARD_INGEST_URL || 'https://pulseboard-api.onrender.com/ingest/logs';
+  private static readonly INGEST_URL = process.env.NEXT_PUBLIC_PULSEBOARD_INGEST_URL || 'https://pulseboard-ingestor-service.onrender.com/ingest/logs';
   private static readonly API_KEY = process.env.NEXT_PUBLIC_PULSEBOARD_API_KEY;
 
   /**
